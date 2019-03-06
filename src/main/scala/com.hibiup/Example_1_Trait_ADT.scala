@@ -4,7 +4,7 @@ import java.util.Date
 
 import scala.util.{Failure, Success, Try}
 
-object Example_1 extends App {
+object Example_1_Trait_ADT extends App {
     // 各种 ADT
     type Amount = BigDecimal
     case class Balance(amount: Amount = 0)
