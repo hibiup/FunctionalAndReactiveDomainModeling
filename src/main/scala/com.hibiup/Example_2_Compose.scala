@@ -1,4 +1,4 @@
-/** Example p50 */
+/** Example p50 (75/322) */
 
 package com.hibiup
 
@@ -29,9 +29,8 @@ object Example_2_Compose {
 
     /** 行为 */
     trait AccountService {
-        def calculateInterest[A <: InterestBearingAccount](account: A,
-                                                           period: Int): Try[BigDecimal] = // “Try”: in case 会失败
-            Success(account.balance.amount * period)
+        def calculateInterest[A <: InterestBearingAccount]: (A, Int) => Try[BigDecimal] = // “Try”: in case 会失败
+            (account, period) => Success(account.balance.amount * period)
     }
 
 
@@ -58,6 +57,10 @@ object Example_2_Compose {
                         c.map(_ + t).getOrElse(t)    // "getOrElse": 如果得到 Failure （实际上 filtre 已经保障了）
 
             )
+
+        def deductTax: BigDecimal => BigDecimal = { interest =>
+            if (interest < 1000) interest else (interest - 0.1 * interest)
+        }
 
 
         def markAccount(id:Int): List[Try[Account]] =

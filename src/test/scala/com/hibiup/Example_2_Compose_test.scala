@@ -31,4 +31,13 @@ class Example_2_Compose_test extends FlatSpec {
         val ass = AccountService.calculateNetAssetValue(2, 100)
         println(ass)
     }
+
+    "andThen and compose" should "" in {
+        val l = List(1,2,3,4)
+        def twice: Int => Int = n => n + n
+        def reduce:Int => Int = n => n-1
+        println(l map twice map reduce)
+        println(l map (twice andThen reduce))
+        println(l map (twice compose reduce))
+    }
 }
