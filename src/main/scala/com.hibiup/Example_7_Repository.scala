@@ -6,7 +6,7 @@ import util.{Failure, Success, Try}
 import collection.mutable.{Map => MMap}
 
 /**
-  * P99(124): 实现对数据库的组合调用
+  * P99(124): 用 Monad 实现对数据库的组合调用
   */
 object Example_7_Repository extends App {
     val today = Calendar.getInstance.getTime
