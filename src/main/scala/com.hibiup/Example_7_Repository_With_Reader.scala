@@ -153,16 +153,14 @@ object Example_7_Repository_With_Reader extends App{
     // 调用 op 方法(2.1)得到 Reader 实例(AccountService.balance)。
     op("1")
             /** 然后调用实例的 run 函数(4.1)传入存储库得到输出。run 的 body 到此时才被需求。
-              * 也就是说如果在此之前函数体是???，那么此刻需要一个实现了，此时整个过程也接近尾部，也就是所谓的“计算的边缘”。
+              * 也就是说如果在此之前函数体是???，那么此刻是时候提供一个了，此时整个计算过程也接近尾部，也就是所谓的“计算的边缘”。
               * Reader monad 通过这种方式将副作用计算退离了核心逻辑。*/
             .run(repo) match {
         case Success(Balance(b)) => println(s"Balance: $$$b")
-        case _ => ???
     }
 
     // 记录不存在，返回失败
     op("2").run(repo)  match {
         case Failure(e) => println(s"Exception: $e")
-        case _ => ???
     }
 }
