@@ -7,24 +7,28 @@ class Example_9_Functor_test extends FlatSpec{
         /**
           * 1) 设计阶段
           */
-        // 定义一个容器
-        case class MyClass[T](d:T)
+        object MyTest {
+            // 定义一个容器
+            case class MyClass[T](d: T)
 
-        // 定义 Functor 的界面
-        trait Functor[F[_]] {
-            def map[A, B](a: F[A])(f: A => B): F[B]
-        }
+            // 定义 Functor 的界面
+            trait Functor[F[_]] {
+                def map[A, B](a: F[A])(f: A => B): F[B]
+            }
 
-        // 将 MyClass 隐式转换成 Functor
-        implicit class MyClassOps(my:MyClass[Int]) {
-            // 根据 Functor trait 的定义调取 map
-            def map[B](f: Int => B)(implicit functor:Functor[MyClass]): MyClass[B] = functor.map(my)(f)
+            // 将 MyClass 隐式转换成 Functor
+            implicit class MyClassOps(my: MyClass[Int]) {
+                // 根据 Functor trait 的定义调取 map
+                def map[B](f: Int => B)(implicit functor: Functor[MyClass]): MyClass[B] = functor.map(my)(f)
+            }
         }
 
 
         /**
           * 2）使用阶段
           */
+        import MyTest._
+
         // 实例化 MyClass 容器的 Functor，实现 map 函数体（每一种类型(MyClass)，都要实现一个）
         implicit val MyClassFunctor = new Functor[MyClass] {
             override def map[A, B](a: MyClass[A])(f: A => B): MyClass[B] = {
