@@ -99,8 +99,11 @@ object Example_7_Repository_With_Reader extends App{
     /** 4.1）实现 Service  */
     case object AccountService extends AccountService[Account, Amount, Balance] {
         override def open(no: String, name: String, openingDate: Option[Date]): Reader[AccountRepository, Try[Account]] = Reader { repo: AccountRepository =>
-            /** 因为返回的是 Reader[AccountRepository, Try[Account]]，而不是执行结果，所以以下 Reader 的执行过程（实现）
-              * 可以一直推迟到 run 被调用之前再提供。设计阶段可以用 ??? 替代。（以下各方法同理。） */
+            /** 因为返回的是 Reader[AccountRepository, Try[Account]] 的实例，而不是执行结果. 所以以下 Reader 的执行过程（实现）
+              * 可以一直推迟到 run 被调用之前再提供。设计阶段可以用 ??? 替代。（以下各方法同理。）
+              *
+              * 不同的计算返回的 Reader 所包含的计算都不一样,所以我们下面定义了 5 个不同的 Reader,分别分装了 5 个不同的计算.
+              * */
             repo.query(no) match {
                 case Success(Some(a)) => Failure(new Exception(s"Already existing account with no $no"))
                 case Success(None) =>
