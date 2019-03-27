@@ -31,7 +31,7 @@ class Example_9_Functor_test extends FlatSpec{
         // 实例化 MyClass 容器的 Functor，实现 map 函数体（每一种类型(MyClass)，都要实现一个）
         implicit val MyClassFunctor = new Functor[MyClass] {
             override def map[A, B](a: MyClass[A])(f: A => B): MyClass[B] = {
-                // 具有特定的算法
+                // 针对 MyClass 的特定的算法
                 val MyClass(m) = a
                 MyClass(f(m))
             }
