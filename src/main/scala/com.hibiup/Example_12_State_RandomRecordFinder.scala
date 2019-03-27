@@ -19,7 +19,7 @@ import collection.mutable.{Map => MMap}
   * 本例演示根据随机数从（内存）数据库中随机捡取记录，数据库只有一条 Account 编号为 1 的记录，随机数范围是 1~9，只有命中 1 时返回．
   * */
 
-object Example_12_State_UniqueNumGenerator extends App {
+object Example_12_State_RandomRecordFinder extends App {
     /***********************************/
     /** 建模 */
     val today = Calendar.getInstance.getTime
