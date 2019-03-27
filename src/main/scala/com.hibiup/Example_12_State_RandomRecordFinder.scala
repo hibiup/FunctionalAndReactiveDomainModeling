@@ -68,16 +68,17 @@ object Example_12_State_UniqueNumGenerator extends App {
         1->Account(1, "John"))
     )
 
-    // 将随机数生成器 Generator 转换成 State Monad. 如果没有执行函数, State Monad 可以只接受 S 类型参数.
+    // 将 RandomAccountFinder 转换成 State Monad. 如果没有执行函数, State Monad 可以只接受 S 类型参数.
+    // StateT是 monad 变换器, 它在这里做的并不重要, 只是帮助我们忽略第二个参数.
     import scalaz.StateT
     val RandomAccountFinderState = StateT.stateMonad[RandomAccountFinder]
 
     import RandomAccountFinderState.{whileM_, gets, modify}
-    // 只要 !_.exists==true 就会一直执行，也就是只要找不到就循环到找到为止。返回 State Monad: whileM_
-    val whileLoop = whileM_(     // whileM_　是 Monad 的一个隐式植入函数, 它返回一个新的 State Monad
-        // gets 是 MonadState 的方法
+    /** whileM_　是 Monad 的一个隐式植入函数, 它返回一个新的 State Monad. */
+    val whileLoop = whileM_(     // 只要 !_.exists==true 就会一直执行，也就是只要找不到就循环到找到为止。返回 State Monad: whileM_
+        /** gets 是 MonadState 的方法, 这里用于得到新 State 的 S 参数 */
         gets(!_.exists),
-        // 这个也是 MonadState.modify. 和前例中的 StateFunctions.modify 不同
+        /** 这个也是 MonadState.modify. 和前例中的 StateFunctions.modify 不同, 这里用于得到新 State 的 A 参数 */
         modify(_ => new RandomAccountFinder(r))  // 直接内部改变 S,这也是为什么这个 State 没有执行函数
     )
 
