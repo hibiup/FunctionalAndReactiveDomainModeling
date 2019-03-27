@@ -3,16 +3,16 @@ package com.hibiup
 import java.util.Date
 
 /**
-  * 例子说明：
+  * p131(156) 例子说明：
   *
   * 用 State Monad 来记录帐户（Account）的状态变更。Balances是所有帐户数据的集合，数据类型是一个 Map, 存储了帐户 AccountNo
   * 和帐户上的存款 Balance。Transaction 是交易记录，存储 AccountNo，交易额和交易日期。多条交易组成 List 数据类型。
   *
   * AccountService.updateBalance 通过输入 List[Transaction] 得到 State Monad
   * */
-object Example_11_State_Random extends App{
+object Example_11_State_AccountBalances extends App{
     /***************************************
-      * 设计时
+      * 建模时
       * */
     type Balance = BigDecimal
     type AccountNo = String
