@@ -5,6 +5,11 @@ import Scalaz._
 
 object Example_13_Kleisli {
     /**
+      * 例一：Stock market 交易 { p140-143}
+      * */
+    /**
+      * Version 1：
+      *
       * 通过统一语言定义出 Algebra 类型
       *
       * 注意每个代数类型之间的输入和输出具有连贯性
@@ -17,12 +22,14 @@ object Example_13_Kleisli {
         type Execution
         type Trade
 
-        def clientOrders: ClientOrder => List[Order]                  // 输出 Order 是下一个代数类型的输入
-        def execute: Market => Account => Order => List[Execution]    // 输出 Execution 是下一个的输入
-        def allocate: List[Account] => Execution => List[Trade]       // 上一个的输出本类型的输入
+        def clientOrders: ClientOrder => List[Order]                  // 下单：输出 Order 是下一个代数类型的输入
+        def execute: Market => Account => Order => List[Execution]    // 执行：输出 Execution 是下一个的输入
+        def allocate: List[Account] => Execution => List[Trade]       // 返回：上一个的输出本类型的输入
     }
 
     /**
+      * Version 2:
+      *
       * 根据代数类型设计函数界面和返回值
       *
       * 保持返回值是 Monad
@@ -34,9 +41,9 @@ object Example_13_Kleisli {
     }
 
     /**
-      * 只要返回值是 Monad，并且上一个函数的输出可以作为下一个函数的输入（curry），那么就可以定义连续的 Kleisli 箭头
+      * Version 3 - Option 1:
       *
-      * Option 1:
+      * 只要返回值是 Monad，并且上一个函数的输出可以作为下一个函数的输入（curry），那么就可以定义连续的 Kleisli 箭头
       *
       * [Cats:]    https://blog.ssanj.net/posts/2017-06-07-composing-monadic-functions-with-kleisli-arrows.html
       * [Scalaz:]  http://eed3si9n.com/learning-scalaz/Composing+monadic+functions.html
@@ -65,7 +72,7 @@ object Example_13_Kleisli {
     }
 
     /**
-      * Option 2:
+      * Version 3 - Option 2:
       *
       * 也可以利用 Scalaz 或 Cats 的 Kleisli 函数将函数的类型转换成 Kleisli arrow
       * */
