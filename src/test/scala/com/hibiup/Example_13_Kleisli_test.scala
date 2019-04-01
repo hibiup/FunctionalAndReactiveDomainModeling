@@ -65,14 +65,23 @@ class Example_13_Kleisli_test extends FlatSpec{
 
         /** 定义 */
         trait FormAndProcess {
-            type LoanApplication
+            trait Applied
+            trait Approved
+            trait Enriched
+
+            // 让申请表保存有状态，以防流程设计中出现错误
+            type LoanApplication[Status]
+            type LoanApplied = LoanApplication[Applied]
+            type LoanApproved = LoanApplication[Approved]
+            type LoanEnriched = LoanApplication[Enriched]
+
 
             // 申请贷款函数 applyLoan 输出一个常规类型 LoanApplication
-            def applyLoan(name: String, purpose: String, date: Date): LoanApplication  // 申请
+            def applyLoan(name: String, purpose: String): LoanApplied  // 申请
 
-            // LoanApplication 将作为审核贷款函数 approve 和 enrich 的输入
-            def approve: Kleisli[Option, LoanApplication, LoanApplication]    // 审核
-            def enrich: Kleisli[Option, LoanApplication, LoanApplication]     // 补全数据
+            // LoanApplied 将作为审核贷款函数 approve 和 enrich 的输入(利用状态来防止顺序错误)
+            def approve: Kleisli[Option, LoanApplied, LoanApproved]    // 审核
+            def enrich: Kleisli[Option, LoanApproved, LoanEnriched]    // 补全数据
 
             // 定义 approve 和 enrich 的 compose
             val op = approve andThen enrich
@@ -80,27 +89,25 @@ class Example_13_Kleisli_test extends FlatSpec{
 
         /** 实现 */
         object FormAndProcess extends FormAndProcess{
-            case class Application(name: String, purpose: String, openDate: Date )
-            override type LoanApplication = Application   // 实现类型定义
+            case class Application[Status](loanNo: Option[Int], name: String, purpose: String, applyDate: Option[Date] )
+            override type LoanApplication[Status] = Application[Status]
 
             // 实现算法
-            override def applyLoan(name: String, purpose: String, date: Date): LoanApplication = {
-                // TODO: ...
-                Application("John","For fun!", date)
+            override def applyLoan(name: String, purpose: String): LoanApplied = {
+                Application[Applied](None, "John","For fun!", None)
             }
 
-            override def approve: Kleisli[Option, LoanApplication, LoanApplication] = Kleisli{ la: LoanApplication =>
-                Option{
-                    // TODO: ...
-                    la
-                }
+            // Scalaz 的 Macro 可能引起编译器误报
+            override def approve: Kleisli[Option, LoanApplied, LoanApproved] = Kleisli{ la =>
+                la.copy(
+                    applyDate = Calendar.getInstance.getTime.some
+                ).some.map(identity[LoanApproved])
             }
 
-            override def enrich: Kleisli[Option, LoanApplication, LoanApplication] = Kleisli{ la =>
-                Option{
-                    // TODO: ...
-                    la
-                }
+            override def enrich: Kleisli[Option, LoanApproved, LoanEnriched] = Kleisli{ la =>
+                la.copy(
+                    loanNo = scala.util.Random.nextInt(10).some
+                ).some.map(identity[LoanEnriched])
             }
         }
 
@@ -108,9 +115,9 @@ class Example_13_Kleisli_test extends FlatSpec{
         import FormAndProcess._
 
         // 得到 LoanApplication 实例
-        val la = applyLoan("John B Rich", "House Building", Calendar.getInstance.getTime)
+        val la = applyLoan("John B Rich", "House Building")
 
-        // 应用于 compose
+        // 将 la 实例应用于 compose
         val res = op run la
         println(res)
     }
