@@ -1,6 +1,7 @@
 package com.hibiup
 
-import scalaz.Kleisli
+import scalaz._
+import Scalaz._
 
 object Example_13_Kleisli {
     /**
@@ -8,7 +9,14 @@ object Example_13_Kleisli {
       *
       * 注意每个代数类型之间的输入和输出具有连贯性
       * */
-    trait Trading_Algebra[Account, Market, Order, ClientOrder, Execution, Trade] {
+    trait Trading_Algebra {
+        type Account
+        type Market
+        type Order
+        type ClientOrder
+        type Execution
+        type Trade
+
         def clientOrders: ClientOrder => List[Order]                  // 输出 Order 是下一个代数类型的输入
         def execute: Market => Account => Order => List[Execution]    // 输出 Execution 是下一个的输入
         def allocate: List[Account] => Execution => List[Trade]       // 上一个的输出本类型的输入
@@ -19,7 +27,7 @@ object Example_13_Kleisli {
       *
       * 保持返回值是 Monad
       * */
-    trait Trading_Algebra_to_Function[Account, Market, Order, ClientOrder, Execution, Trade] {
+    trait Trading_Algebra_to_Function[Account, Market, Order, ClientOrder, Execution, Trade] {  // 可以用类型参数代替 type
         def clientOrders: ClientOrder => List[Order]                  //
         def execute(m: Market, a: Account): Order => List[Execution]  // 将额外的输入作为函数参数，保持上一个函数的输出作为本函数的 curry 输入条件。
         def allocate(as: List[Account]): Execution => List[Trade]     // 同样上一个函数的输出作为本函数的 curry 输入条件。
@@ -27,6 +35,18 @@ object Example_13_Kleisli {
 
     /**
       * 只要返回值是 Monad，并且上一个函数的输出可以作为下一个函数的输入（curry），那么就可以定义连续的 Kleisli 箭头
+      *
+      * Option 1:
+      *
+      * [Cats:]    https://blog.ssanj.net/posts/2017-06-07-composing-monadic-functions-with-kleisli-arrows.html
+      * [Scalaz:]  http://eed3si9n.com/learning-scalaz/Composing+monadic+functions.html
+      * [Scalaz:]  https://underscore.io/blog/posts/2012/07/02/kleisli-arrows.html
+      *
+      * A => F[B]          //g
+      *        B => F[C]   //f
+      *
+      * A => F[C]          //f compose g
+      *
       * */
     trait Trading_Function_to_Kleisli[Account, Market, Order, ClientOrder, Execution, Trade] {
         def clientOrders: Kleisli[List, ClientOrder, Order]                  // 根据函数关系设计 Kleisli
@@ -37,9 +57,34 @@ object Example_13_Kleisli {
         def tradeGeneration(market: Market,
                             broker: Account,
                             clientAccounts: List[Account]) = {
-            clientOrders andThen
+            // import scalaz._; Scalaz._ 或 cats.data.Kleisli; cats.implicits._
+            clientOrders >=>                      // >=> 等价于 andThen
                     execute(market, broker) andThen
                     allocate(clientAccounts)
+        }
+    }
+
+    /**
+      * Option 2:
+      *
+      * 也可以利用 Scalaz 或 Cats 的 Kleisli 函数将函数的类型转换成 Kleisli arrow
+      * */
+    trait Trading_Function_to_Kleisli_implicitly[Account, Market, Order, ClientOrder, Execution, Trade] {
+        def clientOrders: ClientOrder => List[Order]                  // 保持函数签名的外观。
+        def execute(m: Market, a: Account): Order => List[Execution]
+        def allocate(as: List[Account]): Execution => List[Trade]
+
+        def tradeGeneration(market: Market,
+                            broker: Account,
+                            clientAccounts: List[Account]) = {
+            /** 转换成 Kleisli */
+            val clientOrdersK = Kleisli(clientOrders)          // Kleisli[List, ClientOrder, Order]
+            val executeK = Kleisli(execute(market, broker))    // Kleisli[List, Order, Execution]
+            val allocateK = Kleisli(allocate(clientAccounts))  // Kleisli[List, Execution, Trade]
+
+            clientOrdersK >=>   // >=> 等价于 andThen
+                    executeK >=>
+                    allocateK
         }
     }
 }
