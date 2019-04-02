@@ -103,6 +103,11 @@ object Example_11_State_AccountBalances extends App{
 
     // 提交运算
     import AccountService._
-    val new_balances = updateBalance(txns).run(balances)  // .exec(balances) 则只返回状态值
+    /**
+      * .exec(balances) 返回 S
+      * .run(balance) 返回 (S, A), 可以 ._1 或 ._2 取出。
+      * .eval(balance) 返回 A
+      * */
+    val new_balances = updateBalance(txns).run(balances)
     println(s"State：$new_balances")
 }
