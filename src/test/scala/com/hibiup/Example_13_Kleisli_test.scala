@@ -143,7 +143,7 @@ class Example_13_Kleisli_test extends FlatSpec{
             type XiaoZhangDeliveryT = DeliveryT[XiaoZhang]
 
             def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT]
-            def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, XiaoZhangDeliveryT]
+            def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveryT[_]]]
 
             // For Bind[Future]
             import scalaz.std.scalaFuture._
@@ -151,28 +151,29 @@ class Example_13_Kleisli_test extends FlatSpec{
             implicit val ec = global
 
             // Compose method
-            val deliveryPackage: Kleisli[Future, Timestamp, XiaoZhangDeliveryT] = XiaoMingDelivery >=> XiaoZhangDelivery
+            val deliveryPackage: Kleisli[Future, Timestamp, List[DeliveryT[_]]] = XiaoMingDelivery >=> XiaoZhangDelivery
         }
 
         /** 实现　*/
         object Logistic extends Logistic{
-            case class Delivery[SenderT](start:Timestamp,endTime:Option[Timestamp])
-            override type DeliveryT[SenderT] = Delivery[SenderT]
+            case class Turn[SenderT](start:Timestamp, endTime:Option[Timestamp])
+            override type DeliveryT[SenderT] = Turn[SenderT]
 
             override def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT] = Kleisli {t =>
                 Future {
                     println(s"[Thread-${Thread.currentThread.getId}] Start: $t")
                     Thread.sleep(1000)
-                    Delivery[XiaoMing](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
+                    Turn[XiaoMing](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
                 }
             }
 
-            override def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, XiaoZhangDeliveryT] = Kleisli {d =>
+            override def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveryT[_]]] = Kleisli {d =>
                 d.endTime match {
                     case Some(t) => Future.successful {
                         Thread.sleep(1000)
-                        println(s"[Thread-${Thread.currentThread.getId}] End: $t")
-                        Delivery[XiaoZhang](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
+                        val endTime = new Timestamp(Calendar.getInstance.getTime.getTime)
+                        println(s"[Thread-${Thread.currentThread.getId}] End: $endTime")
+                        d :: Turn[XiaoZhang](t, Option(endTime)) ::Nil
                     }
                     case None => Future.failed(new RuntimeException(""))
                 }
@@ -185,6 +186,7 @@ class Example_13_Kleisli_test extends FlatSpec{
         import scala.concurrent.duration._
 
         val start = new Timestamp(Calendar.getInstance.getTime.getTime)
-        Await.result(deliveryPackage(start), 10 seconds)
+        val result = Await.result(deliveryPackage(start), 10 seconds)
+        println(result)
     }
 }
