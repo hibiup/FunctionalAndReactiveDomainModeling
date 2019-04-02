@@ -160,7 +160,7 @@ class Example_13_Kleisli_test extends FlatSpec{
             override type DeliveryT[SenderT] = Turn[SenderT]
 
             override def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT] = Kleisli {t =>
-                Future {
+                Future.successful {
                     println(s"[Thread-${Thread.currentThread.getId}] Start: $t")
                     Thread.sleep(1000)
                     Turn[XiaoMing](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
