@@ -65,9 +65,10 @@ class Example_13_Kleisli_test extends FlatSpec{
 
         /** 定义 */
         trait FormAndProcess {
-            trait Applied
-            trait Approved
-            trait Enriched
+            type Status
+            type Applied <: Status
+            type Approved <: Status
+            type Enriched <: Status
 
             // 让申请表保存有状态，以防流程设计中出现错误
             type LoanApplication[Status]
@@ -120,5 +121,67 @@ class Example_13_Kleisli_test extends FlatSpec{
         // 将 la 实例应用于 compose
         val res = op run la
         println(res)
+    }
+
+    "Logistic" should "" in {
+        import scalaz._
+        import Scalaz._
+
+        // For Bind[Future]
+        import scalaz.std.scalaFuture._
+        import scala.concurrent.Future
+        import scala.concurrent.ExecutionContext.global
+        implicit val ec = global
+
+        import java.sql.Timestamp
+        import java.util.Calendar
+
+        /** 设计 */
+        trait Logistic {
+            type SenderT
+            type XiaoMing <: SenderT
+            type XiaoZhang <: SenderT
+
+            type DeliveryT[Sender]
+            type XiaoMingDeliveryT = DeliveryT[XiaoMing]
+            type XiaoZhangDeliveryT = DeliveryT[XiaoZhang]
+
+            def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT]
+            def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, XiaoZhangDeliveryT]
+            def deliveryPackage: Kleisli[Future, Timestamp, XiaoZhangDeliveryT] = XiaoMingDelivery >=> XiaoZhangDelivery
+        }
+
+        /** 实现　*/
+        object Logistic extends Logistic{
+            case class Delivery[SenderT](start:Timestamp, endTime:Option[Timestamp])
+            override type DeliveryT[SenderT] = Delivery[SenderT]
+
+            override def XiaoMingDelivery: ReaderT[Future, Timestamp, XiaoMingDeliveryT] = Kleisli {t =>
+                Future {
+                    println(s"[Thread-${Thread.currentThread.getId}]-Start: $t")
+                    Thread.sleep(1000)
+                    Delivery[XiaoMing](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
+                }
+            }
+
+            override def XiaoZhangDelivery: ReaderT[Future, XiaoMingDeliveryT, XiaoZhangDeliveryT] = Kleisli {d =>
+                d.endTime match {
+                    case Some(t) => Future.successful {
+                        Thread.sleep(1000)
+                        println(s"[Thread-${Thread.currentThread.getId}]-End: $t")
+                        Delivery[XiaoZhang](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime)))
+                    }
+                    case None => Future.failed(new RuntimeException(""))
+                }
+            }
+        }
+
+        /** 使用 */
+        import Logistic._
+        import scala.concurrent.Await
+        import scala.concurrent.duration._
+
+        val start = new Timestamp(Calendar.getInstance.getTime.getTime)
+        Await.result(deliveryPackage(start), 10 seconds)
     }
 }
