@@ -124,6 +124,9 @@ class Example_13_Kleisli_test extends FlatSpec{
     }
 
     "Logistic" should "" in {
+        /**
+          * 结合 Future 和 State Monad
+          * */
         import scalaz._
         import Scalaz._
 
@@ -141,17 +144,19 @@ class Example_13_Kleisli_test extends FlatSpec{
             type XiaoLi <: SenderT
 
             private[Logistic] type DeliveryT[Sender]
-            type XiaoMingDeliveryT = DeliveryT[XiaoMing]
-            type XiaoZhangDeliveryT = DeliveryT[XiaoZhang]
-            type XiaoWangDeliveryT = DeliveryT[XiaoWang]
-            type XiaoLiDeliveryT = DeliveryT[XiaoLi]
+            type DeliveriedOrFailureT[Sender] = Either[Exception, DeliveryT[Sender]]
+            type XiaoMingDeliveryT = DeliveriedOrFailureT[XiaoMing]
+            type XiaoZhangDeliveryT = DeliveriedOrFailureT[XiaoZhang]
+            type XiaoWangDeliveryT = DeliveriedOrFailureT[XiaoWang]
+            type XiaoLiDeliveryT = DeliveriedOrFailureT[XiaoLi]
 
-            // 前两个接口演示利用类型不同来约束执行顺序
+            /** 前两个接口演示利用类型不同来约束执行顺序(同书中的例子), 所有的函数都以 Future 为最终容器。*/
             def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT]
-            def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveryT[_]]]
-            // 后两个接口是一样的，演示利用 State Monad 来追踪状态。
-            def XiaoWangDelivery: Kleisli[Future, List[DeliveryT[_]], List[DeliveryT[_]]]
-            def XiaoLiDelivery: Kleisli[Future, List[DeliveryT[_]], List[DeliveryT[_]]]
+            def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveriedOrFailureT[_]]]
+
+            /** 后两个接口是一样的，演示利用 State Monad 来追踪状态。*/
+            def XiaoWangDelivery: Kleisli[Future, List[DeliveriedOrFailureT[_]], List[DeliveriedOrFailureT[_]]]
+            def XiaoLiDelivery: Kleisli[Future, List[DeliveriedOrFailureT[_]], List[DeliveriedOrFailureT[_]]]
 
             // For Bind[Future]
             import scalaz.std.scalaFuture._
@@ -159,7 +164,7 @@ class Example_13_Kleisli_test extends FlatSpec{
             implicit val ec = global
 
             // Compose method
-            val deliveryPackage: Kleisli[Future, Timestamp, List[DeliveryT[_]]] =
+            val deliveryPackage: Kleisli[Future, Timestamp, List[DeliveriedOrFailureT[_]]] =
                 XiaoMingDelivery >=> XiaoZhangDelivery >=> XiaoWangDelivery >=> XiaoLiDelivery
         }
 
@@ -169,48 +174,54 @@ class Example_13_Kleisli_test extends FlatSpec{
             override type DeliveryT[SenderT] = Delivery[SenderT]
 
             /** 定义一个 State Monad 来记录 XiaoWang 和 XiaoLi 的 Delivery 状态. */
-            implicit def deliveryState[S <: SenderT]:State[List[DeliveryT[_]], DeliveryT[S]] = State[List[DeliveryT[_]], DeliveryT[S]]{ s =>
-                val t = s.last.endTime match {
-                    case Some(t) => {
-                        Thread.sleep(1000)
-                        val endTime = new Timestamp(Calendar.getInstance.getTime.getTime)
-                        println(s"[Thread-${Thread.currentThread.getId}] Delivery: $endTime")
-                        Delivery[S](t, Option(endTime))
+            implicit def deliveryState[S <: SenderT] = State[List[DeliveriedOrFailureT[_]], DeliveriedOrFailureT[S]]{ s =>
+                val t = s.last match {
+                    case Right(r) => r.endTime match {
+                        case Some(time) => {
+                            Thread.sleep(1000)
+                            val endTime = new Timestamp(Calendar.getInstance.getTime.getTime)
+                            println(s"[Thread-${Thread.currentThread.getId}] Delivery: $endTime")
+                            Right(Delivery[S](time, Option(endTime)))
+                            // 没有实现错误（Left）的情况
+                        }
                     }
+                    case Left(e) => ??? // 没有实现 Left
                 }
                 (s :+ t, t)
             }
 
             override def XiaoMingDelivery: Kleisli[Future, Timestamp, XiaoMingDeliveryT] = Kleisli {t =>
                 Future.successful {
-                    val endTime = new Timestamp(Calendar.getInstance.getTime.getTime)
-                    val state = implicitly[State[List[DeliveryT[_]], DeliveryT[XiaoWang]]]
-                    state.exec(List(Delivery[XiaoMing](t, Option(endTime)))).last.asInstanceOf[XiaoMingDeliveryT]
+                    // 任务必定开始，因此第一个必定是 successful
+                    val state = implicitly[State[List[DeliveriedOrFailureT[_]], DeliveriedOrFailureT[XiaoWang]]]
+                    // Start 的任务只有 endTime (送入 State Monad 后也就是 XiaoMing 的 startTime )
+                    state.exec(List(Right(Delivery[XiaoMing](null, Option(t)))))
+                            .last.asInstanceOf[XiaoMingDeliveryT]  // 执行完后取出 XiaoMingDeliveryT 交给下一个（XiaoZhange）处理
                 }
             }
 
-            override def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveryT[_]]] = Kleisli {d =>
-                d.endTime match {
+            override def XiaoZhangDelivery: Kleisli[Future, XiaoMingDeliveryT, List[DeliveriedOrFailureT[_]]] = Kleisli {
+                // 本例中 XiaoZhang 直接处理 XiaoMingDeliveryT 没有用 State 来 handle Left or Right，因此。。。
+                case d@Right(r) => r.endTime match {
                     case Some(t) => Future.successful {
-                        val l = d :: Delivery[XiaoZhang](t, Option(new Timestamp(Calendar.getInstance.getTime.getTime))) ::Nil
-                        val state = implicitly[State[List[DeliveryT[_]], DeliveryT[XiaoZhang]]]
-                        state.exec(l)
+                        val state = implicitly[State[List[DeliveriedOrFailureT[_]], DeliveriedOrFailureT[XiaoZhang]]]
+                        state.exec(List(d))
                     }
-                    case None => Future.failed(new RuntimeException(""))
                 }
+                case _@Left(e) => ???
             }
 
             // XiaoWang 和 XiaoLi 的状态
-            override def XiaoWangDelivery: Kleisli[Future, List[Delivery[_]], List[Delivery[_]]] = Kleisli {l =>
+            override def XiaoWangDelivery: Kleisli[Future, List[DeliveriedOrFailureT[_]], List[DeliveriedOrFailureT[_]]] = Kleisli {l =>
                 Future {
-                    val state = implicitly[State[List[DeliveryT[_]], DeliveryT[XiaoWang]]]
+                    val state = implicitly[State[List[DeliveriedOrFailureT[_]], DeliveriedOrFailureT[XiaoWang]]]
                     state.exec(l)
                 }
             }
 
-            override def XiaoLiDelivery: Kleisli[Future, List[Delivery[_]], List[Delivery[_]]] = Kleisli {l =>
+            override def XiaoLiDelivery: Kleisli[Future, List[DeliveriedOrFailureT[_]], List[DeliveriedOrFailureT[_]]] = Kleisli {l =>
                 Future {
-                    val state = implicitly[State[List[DeliveryT[_]], DeliveryT[XiaoLi]]]
+                    val state = implicitly[State[List[DeliveriedOrFailureT[_]], DeliveriedOrFailureT[XiaoLi]]]
                     state.exec(l)
                 }
             }
@@ -223,7 +234,7 @@ class Example_13_Kleisli_test extends FlatSpec{
 
         val start = new Timestamp(Calendar.getInstance.getTime.getTime)
         println(s"[Thread-${Thread.currentThread.getId}] Start: $start")
-        val result = Await.result(deliveryPackage(start), 10 seconds)
+        val result = Await.result(deliveryPackage(start), Duration.Inf)
         println(result)
     }
 }
