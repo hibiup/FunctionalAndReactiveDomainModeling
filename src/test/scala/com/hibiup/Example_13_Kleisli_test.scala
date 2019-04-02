@@ -134,11 +134,11 @@ class Example_13_Kleisli_test extends FlatSpec{
 
         /** 设计 */
         trait Logistic {
-            type SenderT
+            private[Logistic] type SenderT
             type XiaoMing <: SenderT
             type XiaoZhang <: SenderT
 
-            type DeliveryT[Sender]
+            private[Logistic] type DeliveryT[Sender]
             type XiaoMingDeliveryT = DeliveryT[XiaoMing]
             type XiaoZhangDeliveryT = DeliveryT[XiaoZhang]
 
