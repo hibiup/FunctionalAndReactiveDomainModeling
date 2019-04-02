@@ -160,8 +160,7 @@ class Example_13_Kleisli_test extends FlatSpec{
 
             // For Bind[Future]
             import scalaz.std.scalaFuture._
-            import scala.concurrent.ExecutionContext.global
-            implicit val ec = global
+            implicit val ec = scala.concurrent.ExecutionContext.global
 
             // Compose method
             val deliveryPackage: Kleisli[Future, Timestamp, List[DeliveriedOrFailureT[_]]] =
