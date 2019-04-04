@@ -73,13 +73,13 @@ package model {
 package repository.interpreter {
     import repository._
 
-    private class AccountRepositoryInterpreter extends AccountRepository {
+    private class AccountRepositoryInMemory extends AccountRepository {
         override def query(no: String): Unit = {
             ??? /* TODO: ... */
         }
     }
 
-    object AccountRepositoryInMemory extends AccountRepositoryInterpreter
+    object AccountRepository extends AccountRepositoryInMemory
 }
 
 package service.intercepter {
@@ -158,5 +158,5 @@ object Example_14_Independence_Injection extends App{
     } yield t) andThen computeInterest andThen computeTax
 
     /** Kick off 计算 */
-    val x = composite("a-123", "John k", 10000, 2000)(AccountRepositoryInMemory)
+    val x = composite("a-123", "John k", 10000, 2000)(AccountRepository)
 }
