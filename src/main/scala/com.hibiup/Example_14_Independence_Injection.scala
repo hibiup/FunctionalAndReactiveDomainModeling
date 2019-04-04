@@ -98,12 +98,14 @@ package service.intercepter {
 
         override def credit(no: String, amount: Amount): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                /* TODO: ... */ ???
+                /* TODO: ... */ // ???
+                \/-(Account("1"))
             }
 
         override def open(no: String, name: String, rate: Option[BigDecimal], openingDate: Option[Date]): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                /* TODO: ... */ ???
+                /* TODO: ... */ // ???
+                \/-(Account("1"))
             }
 
         override def close(no: String, closeDate: Option[Date]): AccountRepositoryOperation = Kleisli { repo =>
@@ -116,12 +118,14 @@ package service.intercepter {
     object InterestPostingService extends InterestPostingService[Account] {
         override def computeInterest: InterestOperation = Kleisli { account =>
             /** 返回 Kleisli !! */
-            /* TODO: ... */ ???
+            /* TODO: ... */ // ???
+            \/-(BigDecimal("1"))
         }
 
         override def computeTax: TaxOperation = Kleisli { amount =>
             /** 返回 Kleisli !! */
-            /* TODO: ... */ ???
+            /* TODO: ... */ // ???
+            \/-(BigDecimal("1"))
         }
     }
 }
@@ -153,7 +157,9 @@ object Example_14_Independence_Injection extends App {
         t <- postTransactions(a, creditAmount, debitAmount)
     } yield t) andThen computeInterest andThen computeTax
 
-    /** Kick off 计算 */
-    val repo = implicitly[AccountRepository]
-    val x = composite("a-123", "John k", 10000, 2000)(repo)
+    /** Kick off 计算
+      *
+      * 注意：AccountRepository 可以隐式得到，因为（组合函数 composite 签名中的）Kleisli 是基于代数对象定义的，因此可以在使用时再提供实例。
+      * */
+    val x = composite("a-123", "John k", 10000, 2000)(implicitly[AccountRepository])
 }
