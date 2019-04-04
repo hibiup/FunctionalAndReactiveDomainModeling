@@ -36,7 +36,8 @@ package service {
     // AccountService 模块
     trait AccountService[Account, Amount] {
         /** 2) 用 Kleisli 来组合注入的外部依赖！！ */
-        type AccountRepositoryOperation= Kleisli[Valid, AccountRepository, Account]
+        type AccountRepositoryOperation = Kleisli[Valid, AccountRepository, Account]
+        type TransferOperation = Kleisli[Valid, AccountRepository, (Account, Account)]
 
         def open(no: String, name: String, rate: Option[BigDecimal], openingDate: Option[Date]): AccountRepositoryOperation
         def close(no: String, closeDate: Option[Date]): AccountRepositoryOperation
@@ -44,14 +45,14 @@ package service {
         def credit(no: String, amount: Amount): AccountRepositoryOperation
 
         /** 因为所有的函数返回都是基于 Kleisli　的，因此函数之间可以组合　 */
-        def transfer(from: String, to: String, amount: Amount): AccountRepositoryOperation = for {
+        def transfer(from: String, to: String, amount: Amount): TransferOperation = for {
             a <- debit(from, amount)
             b <- credit(to, amount)
         } yield (a, b)
     }
 
     // InterestPostingService 模块
-    trait InterestPostingService[Account, Amount] {
+    trait InterestPostingService[Account] {
         import types._
 
         type InterestOperation = ValidedOperation[Account, Amount]
@@ -73,13 +74,11 @@ package model {
 package repository.interpreter {
     import repository._
 
-    private class AccountRepositoryInMemory extends AccountRepository {
+    object AccountRepositoryInMemory extends AccountRepository {
         override def query(no: String): Unit = {
             ??? /* TODO: ... */
         }
     }
-
-    object AccountRepository extends AccountRepositoryInMemory
 }
 
 package service.intercepter {
@@ -87,57 +86,55 @@ package service.intercepter {
     import service._
     import types._
 
-    private class AccountServiceInterpreter extends AccountService[Account, Amount] {
-        override def debit(no: String, amount: Amount): AccountRepositoryOperation =
-            Kleisli {
+    /** 实例化 AccountService 的伴随对象 */
+    object AccountService extends AccountService[Account, Amount] {
+        import scalaz._
+
+        override def debit(no: String, amount: Amount): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                ??? /* TODO: ... */
+                /* TODO: ... */ // ???
+                \/-(Account("1"))
             }
 
-        override def credit(no: String, amount: Amount): AccountRepositoryOperation =
-            Kleisli {
+        override def credit(no: String, amount: Amount): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                ??? /* TODO: ... */
+                /* TODO: ... */ ???
             }
 
-        override def open(no: String, name: String, rate: Option[BigDecimal], openingDate: Option[Date]): AccountRepositoryOperation =
-            Kleisli {
+        override def open(no: String, name: String, rate: Option[BigDecimal], openingDate: Option[Date]): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                ??? /* TODO: ... */
+                /* TODO: ... */ ???
             }
 
-        override def close(no: String, closeDate: Option[Date]): AccountRepositoryOperation =
-            Kleisli {
+        override def close(no: String, closeDate: Option[Date]): AccountRepositoryOperation = Kleisli { repo =>
                 /** 返回 Kleisli !! */
-                ??? /* TODO: ... */
+                /* TODO: ... */ ???
             }
     }
-    /** 实例化 AccountService 的伴随对象 */
-    object AccountService extends AccountServiceInterpreter
 
     /** So do other modules ...*/
-    private class InterestPostingServiceInterpreter extends InterestPostingService[Account, Amount] {
-        override def computeInterest: InterestOperation = Kleisli {
+    object InterestPostingService extends InterestPostingService[Account] {
+        override def computeInterest: InterestOperation = Kleisli { account =>
             /** 返回 Kleisli !! */
-            ??? /* TODO: ... */
+            /* TODO: ... */ ???
         }
 
-        override def computeTax: TaxOperation = Kleisli {
+        override def computeTax: TaxOperation = Kleisli { amount =>
             /** 返回 Kleisli !! */
-            ??? /* TODO: ... */
+            /* TODO: ... */ ???
         }
     }
-    object InterestPostingService extends InterestPostingServiceInterpreter
 }
 
 /** 用户端 */
-object Example_14_Independence_Injection extends App{
+object Example_14_Independence_Injection extends App {
     // 引入 ADT
     import model._
     import types._
+    import repository.AccountRepository
 
     // 引入模块的实现
-    import repository.interpreter._
+    implicit val AccountRepository = repository.interpreter.AccountRepositoryInMemory
     import service.intercepter.AccountService._
     import service.intercepter.InterestPostingService._
 
@@ -149,14 +146,14 @@ object Example_14_Independence_Injection extends App{
         } yield d
 
     /** 跨模块的功能组合 */
-    import repository._
     type ComposeFinalOperation = ValidedOperation[AccountRepository, Amount]
 
-    def composite(no: String, name: String, creditAmount: Amount, debitAmount: Amount): ComposeFinalOperation = (for {
+    def composite(no: String, name: String, creditAmount: Amount, debitAmount: Amount): ComposeFinalOperation = ( for {
         a <- open(no, name, Option(BigDecimal(0.4)), None)
         t <- postTransactions(a, creditAmount, debitAmount)
     } yield t) andThen computeInterest andThen computeTax
 
     /** Kick off 计算 */
-    val x = composite("a-123", "John k", 10000, 2000)(AccountRepository)
+    val repo = implicitly[AccountRepository]
+    val x = composite("a-123", "John k", 10000, 2000)(repo)
 }
