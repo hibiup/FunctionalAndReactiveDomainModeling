@@ -159,7 +159,7 @@ object Example_14_Independence_Injection extends App {
 
     /** Kick off 计算
       *
-      * 注意：AccountRepository 可以隐式得到，因为（组合函数 composite 签名中的）Kleisli 是基于代数对象定义的，因此可以在使用时再提供实例。
+      * 注意：AccountRepository 可以隐式得到，因为（组合函数 composite 签名中的）Kleisli 是基于代数对象的，因此可以在使用时再提供实例。
       * */
     val x = composite("a-123", "John k", 10000, 2000)(implicitly[AccountRepository])
 }
