@@ -5,7 +5,7 @@ import java.util.{Calendar, Date}
 import scalaz.{-\/, Kleisli, NonEmptyList, \/, \/-}
 
 /**
-  * 演示一个具有外部依赖的实例
+  * 演示一个具有外部依赖的实例（p154-p162）
   * */
 
 /**
