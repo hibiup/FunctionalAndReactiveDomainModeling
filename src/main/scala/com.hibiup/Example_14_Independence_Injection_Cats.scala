@@ -11,9 +11,9 @@ import cats.implicits._
 /**
   * 定义时
   */
-object types {
-    type Valid[A] = EitherNel[NonEmptyList[String], A]
-    type ValidedOperation[A, B] = Kleisli[Valid, A, B]
+package object types {
+    type Valid[A] = EitherNel[String, A]
+    type ValidOperation[A, B] = Kleisli[Valid, A, B]
     type Amount = BigDecimal
 }
 
@@ -53,8 +53,8 @@ package service {
     trait InterestPostingService[Account] {
         import types._
 
-        type InterestOperation = ValidedOperation[Account, Amount]
-        type TaxOperation = ValidedOperation[Amount, Amount]
+        type InterestOperation = ValidOperation[Account, Amount]
+        type TaxOperation = ValidOperation[Amount, Amount]
 
         def computeInterest: InterestOperation //Kleisli[Valid, Account, Amount]
         def computeTax: TaxOperation
@@ -146,7 +146,7 @@ object Example_14_Independence_Injection_Cats extends App {
         } yield d
 
     /** 跨模块的功能组合 */
-    type ComposeFinalOperation = ValidedOperation[AccountRepository, Amount]
+    type ComposeFinalOperation = ValidOperation[AccountRepository, Amount]
 
     def composite(no: String, name: String, creditAmount: Amount, debitAmount: Amount): ComposeFinalOperation = ( for {
         a <- open(no, name, Option(BigDecimal(0.4)), None)

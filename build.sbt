@@ -2,6 +2,7 @@ val scalaTestVersion = "3.0.5"
 val shapelessVersion = "2.3.3"
 val scalaCheckVersion = "1.14.0"
 val scalazVersion = "7.2.27"
+val catsVersion = "1.6.0"
 
 lazy val ShapelessGuide = (project in file(".")).
         settings(
@@ -12,7 +13,8 @@ lazy val ShapelessGuide = (project in file(".")).
             libraryDependencies ++= Seq(
                 "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
                 "org.scalacheck" %% "scalacheck" % scalaCheckVersion % Test,
-                "org.scalaz" %% "scalaz-core" % scalazVersion
+                "org.scalaz" %% "scalaz-core" % scalazVersion,
+                "org.typelevel" %% "cats-core" % catsVersion
             ),
             addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full),
             scalacOptions ++= Seq(
