@@ -16,23 +16,31 @@ package Example_15_Export_To_Java {
         type InterestOperation = ValidOperation[Account, Option[Amount]]
         type TaxOperation = ValidOperation[Option[Amount], Amount]
 
-        /** 不能直接将 higher kind type 暴露给 Java．因为 Java 编译器会忽略内部类型
+        /**
+          * １）不建议直接将 higher kind type 暴露给 Java．因为 Java 编译器会忽略内部类型
           *
           * https://stackoverflow.com/questions/55528032/how-to-export-scala-transformation-to-java
           * */
-        def _computeInterest: InterestOperation = Kleisli {account =>
+        def computeInterestK: InterestOperation = Kleisli {account =>
             computeInterest(account)
         }
-        /** 因此要将关系将高级类型剥离后交给 Java 实现. */
+        /** 将高级类型 Kleisli 剥离后交给 Java 去实现. */
         def computeInterest(acount:Account):Valid[Option[Amount]]
 
-        /** 否则 Intellij 可能产生警告,但是依然可以编译：
+        /**
+          * ２）如果直接暴露，需要在 Java 代码中移除 Either 的内部类型，并且增加以下配置到 build.sbt
+          *
+          * javacOptions ++= Seq(
+          *                 "-Xlint:unchecked"
+          *             )
+          *
+          * 然后执行：
           *
           * > sbt clean compile
           * */
-        def computeTax: TaxOperation
+        def computeTaxK: TaxOperation
 
-        def op: ValidOperation[Account, Amount] = _computeInterest andThen computeTax
+        def op: ValidOperation[Account, Amount] = computeInterestK andThen computeTaxK
     }
 
     case class Account()

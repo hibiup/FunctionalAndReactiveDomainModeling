@@ -14,9 +14,11 @@ public class JavaInterestService<Account> implements InterestService<Account> {
         throw new NotImplementedException();
     }
 
-    // 以下 IDE 警告可以忽略
+    /** 以下 Intellij 警告 "attempting to use incompatible return type" 可以忽略
+     * */
+    @SuppressWarnings("unchecked")
     @Override
-    public Kleisli<Either, Option<BigDecimal>, BigDecimal> computeTax() {
+    public Kleisli<Either, Option<BigDecimal>, BigDecimal> computeTaxK() {
         throw new NotImplementedException();
     }
 }

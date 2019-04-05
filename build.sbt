@@ -25,5 +25,8 @@ lazy val ShapelessGuide = (project in file(".")).
                 "-Ypartial-unification",
                 "-feature",
                 "-language:_"
+            ),
+            javacOptions ++= Seq(
+                "-Xlint:unchecked"
             )
         )
