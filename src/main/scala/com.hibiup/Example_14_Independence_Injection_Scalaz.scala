@@ -1,29 +1,26 @@
-package com.hibiup
+package com.hibiup.example14.scalaz
 
-import java.util.{Calendar, Date}
+import java.util.Date
 
-import scalaz.{-\/, Kleisli, NonEmptyList, \/, \/-}
+import scalaz.{Kleisli, NonEmptyList, \/, \/-}
 
 /**
-  * 演示一个具有外部依赖的实例（p154-p162）
+  * 演示一个具有外部依赖的实例（p154-p162） Scalaz 版
   * */
-
 /**
   * 定义时
   */
+object types {
+    type Valid[A] = NonEmptyList[String] \/ A            // 相当于 Either[NonEmptyList[String], A]
+    type ValidedOperation[A, B] = Kleisli[Valid, A, B]
+    type Amount = BigDecimal
+}
+
 package repository {
     /** Repository 是要被引入的外部模块 */
     trait AccountRepository {
         def query(no:String)
     }
-}
-
-object types {
-    type Valid[A] = NonEmptyList[String] \/ A // 相当于 Either[NonEmptyList[String], A]
-
-    type ValidedOperation[A, B] = Kleisli[Valid, A, B]
-
-    type Amount = BigDecimal
 }
 
 package service {
