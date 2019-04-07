@@ -14,6 +14,7 @@ lazy val ShapelessGuide = (project in file(".")).
                 "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
                 "org.scalacheck" %% "scalacheck" % scalaCheckVersion % Test,
                 "org.scalaz" %% "scalaz-core" % scalazVersion,
+                "org.scalaz" %% "scalaz-concurrent" % scalazVersion,
                 "org.typelevel" %% "cats-core" % catsVersion
             ),
             addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full),
