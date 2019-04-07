@@ -1,4 +1,4 @@
-package com.hibiup.example_14
+package com.hibiup.example_17
 
 /**
   * 五个步骤实现　Free Monad，前四个步骤都围绕代数模型展开，第五个步骤提交业务实现逻辑：
@@ -18,7 +18,7 @@ import scalaz.concurrent.Task
 package Example_17_Free {
     import java.util.{Calendar, Date}
 
-    import com.hibiup.Example_17_Free.model.AccountRepoF
+    import com.hibiup.example_17.Example_17_Free.model.AccountRepoF
     import scalaz.Free
 
     /********************************************/

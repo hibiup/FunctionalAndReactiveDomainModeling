@@ -1,10 +1,8 @@
-package com.hibiup.example15;
+package com.hibiup.example_15;
 
-import cats.Applicative;
-import cats.arrow.FunctionK;
 import cats.data.Kleisli;
 import cats.data.NonEmptyList;
-import com.hibiup.example15.Example_15_Export_To_Java.InterestService;
+import com.hibiup.example_15.Example_15_Export_To_Java.InterestService;
 import scala.Option;
 import scala.Some;
 import scala.math.BigDecimal;
