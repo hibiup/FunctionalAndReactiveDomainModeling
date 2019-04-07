@@ -1,4 +1,4 @@
-package com.hibiup.example14.scalaz
+package com.hibiup.example_14.scalaz
 
 import java.util.Date
 

@@ -1,4 +1,4 @@
-package com.hibiup
+package com.hibiup.example_14
 
 /**
   * 五个步骤实现　Free Monad，前四个步骤都围绕代数模型展开，第五个步骤提交业务实现逻辑：
@@ -112,7 +112,7 @@ package Example_17_Free {
     }
 
     /********************************************/
-    /** 4) 定义 Interpreter,　将运算绑定到 Free Monad
+    /** 4) 定义 Interpreter,　将 Free Monad 作为参数传入
       *
       * 与 Kleisli 的例子不同，这个 Interpreter 不继承 AccountRepository，相反它将 AccountRepository 中的函数(或由其衍生的复合函数)
       * 作为参数，然后将运算应用在之上．
@@ -131,25 +131,29 @@ package Example_17_Free {
         // 基于内存的数据库
         private val table: MMap[String, Account] = MMap.empty[String, Account]
 
-        // 将代表运算的 ADT 从 Free Monad 中取出交给 step(ADT ~> Task)
-        override def apply[A](action: AccountRepoF[A]): Task[A] = action.foldMap(step)
+        /** 将代表运算的 ADT 从 Free Monad 中取出交给 step(ADT ~> Task). route 根据 ADT 实现路由 */
+        override def apply[A](action: AccountRepoF[A]): Task[A] = action.foldMap(route)
 
-        /** 实现业务计算 */
-        // step 获得 Free 内的装载 AccountRepo，将它转成 Task[A]. Task 是 Scalaz 提供的 Future[A] 替代。
-        // ~> 是 Scalaz 提供的 Transformation 运算，因为 apply[A] 的参数 A 需要适应性透明传递，因此需要 ~>
-        private val step: AccountRepo ~> Task = new (AccountRepo ~> Task) {
-            override def apply[A](fa: AccountRepo[A]): Task[A] = fa match {  //
+        /** 5) 实现业务计算 */
+        // route 获得 Free 内的装载 ADT(AccountRepo)，将它转成 M (Task[A]).
+        // Task[A] 是 Scalaz 提供的 Future[A] 替代。
+        // ~> 是 Scalaz 提供的 Transformation 运算，因为 apply[A] 的参数 A 需要适应性透明传递
+        private val route: AccountRepo ~> Task = new (AccountRepo ~> Task) {
+            override def apply[A](action: AccountRepo[A]): Task[A] = action match {  //
                 case Query(no) =>
                     table.get(no)
                             .map { a => Task.now(a) }
                             .getOrElse {
                                 Task.fail(new RuntimeException(s"Account no $no not found"))
                             }
-                case Store(account) => Task.now(table += ((account.no, account))).void
-                case Delete(no) => Task.now(table -= no).void
+                case Store(account) =>
+                    Task.now(table += ((account.no, account))).void
+                case Delete(no) =>
+                    Task.now(table -= no).void
             }
         }
     }
+
 
     /** 使用 ******************************************/
     object Client extends App {
@@ -157,20 +161,20 @@ package Example_17_Free {
         import AccountRepository._
 
         // compF 是一个由 AccountRepository 衍生出静态的 Free monad 组合，它将被交给 AccountRepositoryInterpreter
-        val compF: Account => AccountRepoF[Unit] = account => for {
+        def compF: Account => AccountRepoF[Unit] = account => for {
             a <- query(account.no)
             _ <- store(a.copy(balance = BigDecimal(1000)))
             _ <- delete(a.no)
         } yield a
 
         /** 将 Free Monad 转递给 Interpreter*/
-        val interpreter = AccountRepoMutableInterpreter()
-        val compInter: Task[_] = interpreter.apply(compF(Account("a-123", "John K")))
+        val interpreter = AccountRepoMutableInterpreter()   // 最好隐式获得
+        val compInter: Task[_] = interpreter(compF(Account("a-123", "John K")))
 
         /** 执行 interpreter */
-        println(compInter.unsafePerformAsync{
+        compInter.unsafePerformAsync{
             case \/-(a) => println(a)
             case -\/(e) => println(e)
-        })
+        }
     }
 }

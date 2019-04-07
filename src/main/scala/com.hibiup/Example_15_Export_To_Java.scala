@@ -1,4 +1,4 @@
-package com.hibiup.example15
+package com.hibiup.example_15
 
 import cats.data.{EitherNel, Kleisli, NonEmptyList}
 import cats.implicits._
