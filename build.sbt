@@ -18,6 +18,7 @@ lazy val ShapelessGuide = (project in file(".")).
                 "org.typelevel" %% "cats-core" % catsVersion
             ),
             addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full),
+            addCompilerPlugin("org.scalameta" %% "paradise" % "3.0.0-M11" cross CrossVersion.full),
             scalacOptions ++= Seq(
                 "-Xplugin-require:macroparadise",
                 "-language:higherKinds",

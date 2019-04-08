@@ -89,15 +89,15 @@ package example_18 {
 
         println(s"[Thread-${Thread.currentThread().getId}] - main")
         Await.result(comp(2), 10 seconds)match {
-            case \/-(s) => println(s"Finally we got: ${s}")
-            case -\/(e) => println(e.getMessage)
+            case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+            case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
         }
         println(s"[Thread-${Thread.currentThread().getId}] - main")
 
         println(s"[Thread-${Thread.currentThread().getId}] - i2f 失败并不会提前终止 f2s")
         Await.result(comp(-2), 10 seconds)match {
-            case \/-(s) => println(s"Finally we got: ${s}")
-            case -\/(e) => println(e.getMessage)
+            case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+            case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
         }
 
         println(s"[Thread-${Thread.currentThread().getId}] - main")
@@ -136,9 +136,8 @@ package example_18 {
                 /** 返回的时候需要一层一层按顺序打包回 EitherT[Future[Either]]　*/
                 EitherT {
                     Future {
-                        println(s"[Thread-${Thread.currentThread().getId}] - i2f in Future")
                         if (i >= 0) BigDecimal(i).right
-                        else (new RuntimeException("Input is smaller then 0")).left
+                        else (new RuntimeException(s"[Thread-${Thread.currentThread().getId}] - i2f - in Future: Input is smaller then 0")).left
                     }
                 }
             }
@@ -148,10 +147,10 @@ package example_18 {
               * 并且因为提前拆包，因此如果前一步骤返回异常，以下过程得以避免执行.
               * */
             override def f2s: Kleisli[Valid, BigDecimal, String] = Kleisli { f:BigDecimal =>     // 不必对 f 解包，直接就得到输入值。
-                println(s"[Thread-${Thread.currentThread().getId}] - f2s in the same thread of i2f's Future  <- 如果前一步骤失败, 将被避免执行")
+                println(s"[Thread-${Thread.currentThread().getId}] - f2s - in the same thread of i2f's Future  <- 如果前一步骤失败, 将被避免执行")
                 EitherT {
                     Future {
-                        println(s"[Thread-${Thread.currentThread().getId}] - f2s in Future")
+                        println(s"[Thread-${Thread.currentThread().getId}] - f2s - in Future")
                         f.toString.right     // 虽然输入简化了，但是返回值还是要打包成 Transformer 支持的类型
                     }
                 }
@@ -162,11 +161,11 @@ package example_18 {
         import scala.concurrent.Await
         import scala.concurrent.duration._
 
-        println(s"[Thread-${Thread.currentThread().getId}] - main === 测试 Kleisli ===")
+        println(s"[Thread-${Thread.currentThread().getId}] === main: 测试 Kleisli ===")
         comp(2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"Finally we got: ${s}")
-                case -\/(e) => println(e.getMessage)
+                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
         println(s"[Thread-${Thread.currentThread().getId}] - main")
@@ -174,23 +173,23 @@ package example_18 {
         println(s"[Thread-${Thread.currentThread().getId}] - i2f 失败将避免执行 f2s")
         comp(-2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"Finally we got: ${s}")
-                case -\/(e) => println(e.getMessage)
+                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
 
         println(s"[Thread-${Thread.currentThread().getId}] main === 测试 for-comprehension ===")
         compFor(2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"Finally we got: ${s}")
-                case -\/(e) => println(e.getMessage)
+                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
         println(s"[Thread-${Thread.currentThread().getId}] - main")
         compFor(-2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"Finally we got: ${s}")
-                case -\/(e) => println(e.getMessage)
+                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
     }
