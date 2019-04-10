@@ -1,13 +1,18 @@
 package com.hibiup
 
-import scalaz._
-import Scalaz._
-
 package example_18 {
+    import scalaz._
+    import Scalaz._
+    import com.typesafe.scalalogging.Logger
+    import org.slf4j.LoggerFactory
+    import scalaz.effect.IO
+
     /**
       * 例一：用普通 Either(Scalaz.\/) 作为容器，没有嵌套容器。
       * */
     object None_Transformer_None_Future extends App {
+        val logger = Logger(LoggerFactory.getLogger(DesignInterpreter.getClass))
+
         type Valid[A] = Exception \/ A
 
         trait Design {
@@ -18,24 +23,24 @@ package example_18 {
 
         object DesignInterpreter extends Design {
             override def i2f: Kleisli[Valid, Int, BigDecimal] = Kleisli { i =>
-                println(s"[Thread-${Thread.currentThread().getId}] - i2f")
+                logger.debug(s"[Thread-${Thread.currentThread().getId}] - i2f")
                 if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
             }
 
             override def f2s: Kleisli[Valid, BigDecimal, String] = Kleisli { f =>
-                println(s"[Thread-${Thread.currentThread().getId}] - f2s")
+                logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s")
                 f.toString().right
             }
         }
 
         import DesignInterpreter._
 
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] - main")
         comp(-1) match {
-            case \/-(s) => println(s"Finally we got: ${s}")
-            case -\/(e) => println(e.getMessage)
+            case \/-(s) => logger.debug(s"Finally we got: ${s}")
+            case -\/(e) => logger.debug(e.getMessage)
         }
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] - main")
     }
 
     /**
@@ -43,22 +48,27 @@ package example_18 {
       * */
     object Future_Without_Transformer extends App {
         import scala.concurrent.Future
+
         implicit val ec = scala.concurrent.ExecutionContext.global
+        val logger = Logger(LoggerFactory.getLogger(DesignInterpreter.getClass))
 
         /** 定义 Either 为返回值的容器 */
         type Valid[A] = Exception \/ A
+        type InitialInput = Int
 
         trait Design {
             /** Kleisli：用 Future 作为返回值容器。输入值和输出值包裹在内层 Either 中，这需要 interpreter 自己去解包。 */
-            def i2f: Kleisli[Future, Int, Valid[BigDecimal]]
+            def i2f: Kleisli[Future, InitialInput, Valid[BigDecimal]]
             def f2s: Kleisli[Future, Valid[BigDecimal], Valid[String]]
-            def comp: Kleisli[Future, Int, Valid[String]] = i2f andThen f2s
+            def comp: Kleisli[Future, InitialInput, Valid[String]] = i2f andThen f2s
         }
 
         object DesignInterpreter extends Design {
-            override def i2f: Kleisli[Future, Int, Valid[BigDecimal]] = Kleisli { i =>
+            //implicit var current_logs:List[IO[Unit]] = List.empty
+
+            override def i2f: Kleisli[Future, InitialInput, Valid[BigDecimal]] = Kleisli { i =>
                 Future {
-                    println(s"[Thread-${Thread.currentThread().getId}] - i2f")
+                    /*current_logs = Log{ */logger.debug(s"[Thread-${Thread.currentThread().getId}] - i2f")/* }*/
                     if (i >= 0) (BigDecimal(i)).right else (new RuntimeException("Input is smaller then 0")).left
                 }
             }
@@ -68,15 +78,15 @@ package example_18 {
               * 不仅需要拆包，并且会导致以下 Future 必定会被执行，即便前一步骤返回异常（因为不能提前判断）。
               * */
             override def f2s: Kleisli[Future, Valid[BigDecimal], Valid[String]] = Kleisli {f:Valid[_] =>
-                println(s"[Thread-${Thread.currentThread().getId}] - f2s in the same thread of i2f's Future")
+                /*current_logs = Log{ */logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s in the same thread of i2f's Future")/* }*/
                 // 解出 Either.
                 f match {
                     case \/-(s) => Future { // 重新打包成 Future[Either]
-                        println(s"[Thread-${Thread.currentThread().getId}] - f2s in Future")
+                        /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s in Future")/* }*/
                         s.toString.right
                     }
                     case -\/(e) => Future {
-                        println(s"[Thread-${Thread.currentThread().getId}] - f2s in Future <- 不应该执行")
+                        /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s in Future <- 不应该执行") /*}*/
                         e.left
                     }
                 }
@@ -87,20 +97,20 @@ package example_18 {
         import scala.concurrent.Await
         import scala.concurrent.duration._
 
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
         Await.result(comp(2), 10 seconds)match {
-            case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-            case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+            case \/-(s) => /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}") /*}*/
+            case -\/(e) => /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")/* }*/
         }
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}] - main") /*}*/
 
-        println(s"[Thread-${Thread.currentThread().getId}] - i2f 失败并不会提前终止 f2s")
+        /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}] - i2f 失败并不会提前终止 f2s") /*}*/
         Await.result(comp(-2), 10 seconds)match {
-            case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-            case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+            case \/-(s) =>/* current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}") /*}*/
+            case -\/(e) => /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}") /*}*/
         }
 
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        /*current_logs = Log{*/ logger.debug(s"[Thread-${Thread.currentThread().getId}] - main") /*}*/
+        //current_logs.foreach(_.unsafePerformIO())
     }
 
     /**
@@ -108,7 +118,9 @@ package example_18 {
       * */
     object Future_With_Transformer extends App {
         import scala.concurrent.Future
+
         implicit val ec = scala.concurrent.ExecutionContext.global
+        val logger = Logger(LoggerFactory.getLogger(DesignInterpreter.getClass))
 
         /** 将 Future 定义在 EitherT 里面，但是最里层依然是 Either. */
         type Valid[A] = EitherT[Future, Exception, A]
@@ -131,8 +143,9 @@ package example_18 {
         }
 
         object DesignInterpreter extends Design {
+
             override def i2f: Kleisli[Valid, Int, BigDecimal] = Kleisli { i =>
-                println(s"[Thread-${Thread.currentThread().getId}] - i2f")
+                logger.debug(s"[Thread-${Thread.currentThread().getId}] - i2f")
                 /** 返回的时候需要一层一层按顺序打包回 EitherT[Future[Either]]　*/
                 EitherT {
                     Future {
@@ -147,10 +160,10 @@ package example_18 {
               * 并且因为提前拆包，因此如果前一步骤返回异常，以下过程得以避免执行.
               * */
             override def f2s: Kleisli[Valid, BigDecimal, String] = Kleisli { f:BigDecimal =>     // 不必对 f 解包，直接就得到输入值。
-                println(s"[Thread-${Thread.currentThread().getId}] - f2s - in the same thread of i2f's Future  <- 如果前一步骤失败, 将被避免执行")
+                logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s - in the same thread of i2f's Future  <- 如果前一步骤失败, 将被避免执行")
                 EitherT {
                     Future {
-                        println(s"[Thread-${Thread.currentThread().getId}] - f2s - in Future")
+                        logger.debug(s"[Thread-${Thread.currentThread().getId}] - f2s - in Future")
                         f.toString.right     // 虽然输入简化了，但是返回值还是要打包成 Transformer 支持的类型
                     }
                 }
@@ -161,35 +174,35 @@ package example_18 {
         import scala.concurrent.Await
         import scala.concurrent.duration._
 
-        println(s"[Thread-${Thread.currentThread().getId}] === main: 测试 Kleisli ===")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] === main: 测试 Kleisli ===")
         comp(2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+                case \/-(s) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] - main")
 
-        println(s"[Thread-${Thread.currentThread().getId}] - i2f 失败将避免执行 f2s")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] - i2f 失败将避免执行 f2s")
         comp(-2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+                case \/-(s) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
 
-        println(s"[Thread-${Thread.currentThread().getId}] main === 测试 for-comprehension ===")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] main === 测试 for-comprehension ===")
         compFor(2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+                case \/-(s) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
-        println(s"[Thread-${Thread.currentThread().getId}] - main")
+        logger.debug(s"[Thread-${Thread.currentThread().getId}] - main")
         compFor(-2) match {
             case EitherT(f) => Await.result(f.map {
-                case \/-(s) => println(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
-                case -\/(e) => println(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
+                case \/-(s) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: Finally we got: ${s}")
+                case -\/(e) => logger.debug(s"[Thread-${Thread.currentThread().getId}]: ${e.getMessage}")
             }, 10 seconds)
         }
     }
