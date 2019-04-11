@@ -3,6 +3,7 @@ val shapelessVersion = "2.3.3"
 val scalaCheckVersion = "1.14.0"
 val scalazVersion = "7.2.27"
 val catsVersion = "1.6.0"
+val catsEffectVersion = "1.2.0"
 val logBackVersion = "1.2.3"
 val scalaLogging = "3.9.2"
 
@@ -18,6 +19,7 @@ lazy val ShapelessGuide = (project in file(".")).
                 "org.scalaz" %% "scalaz-core" % scalazVersion,
                 "org.scalaz" %% "scalaz-concurrent" % scalazVersion,
                 "org.typelevel" %% "cats-core" % catsVersion,
+                "org.typelevel" %% "cats-effect" % catsEffectVersion,
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
             ),
