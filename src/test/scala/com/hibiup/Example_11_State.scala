@@ -58,4 +58,54 @@ class Example_11_State extends FlatSpec{
             }
         }
     }
+
+    "A StateT for logging" should "" in {
+        implicit val ec =  scala.concurrent.ExecutionContext.global
+
+        type Valid[A] = Exception \/ A
+        type Report = List[IO[Unit]]
+        type StateResultT[A] = StateT[Future, Report, A]
+
+        implicit val StateResultBind: Bind[StateResultT] = new Bind[StateResultT] {
+            override def bind[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap f
+            override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map f
+        }
+
+        def i2f: Kleisli[StateResultT, Int, Valid[BigDecimal]] = Kleisli{ i =>
+            StateT { logs =>
+                Future (
+                        logs :+ IO(logger.debug("i2f")),
+                        if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
+                )
+            }
+        }
+
+        /**
+          * 需要改进:
+          *     i2f 失败的话, 就不应该继续执行 f2s,但是因为传入参数是 Valid[_] 总是有效, 因此 f2s 总是会被执行到. 这需要修改.
+          * */
+        def f2s: Kleisli[StateResultT, Valid[BigDecimal], Valid[String]] = Kleisli { state =>
+            StateT { logs =>
+                Future (
+                    logs :+ IO(logger.debug("f2s")),
+                    state match{
+                        case \/-(f) => f.toString.right
+                        case -\/(e) => e.left
+                    }
+                )
+            }
+        }
+
+        def comp: Kleisli[StateResultT, Int, Valid[String]] = i2f andThen f2s
+
+        Await.result(comp(-2)(List.empty), Duration.Inf) match {
+            case (logs, a) => {
+                logs.foreach(_.unsafePerformIO())
+                a match {
+                    case \/-(s) => println(s"Finally we get: ${s}")
+                    case -\/(e) => println(e.getMessage)
+                }
+            }
+        }
+    }
 }
