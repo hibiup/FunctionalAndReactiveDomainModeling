@@ -139,12 +139,12 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
           * */
         implicit val StateResultBind: Bind[StateResultT] = new Bind[StateResultT] {
             override def bind[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap {
-                case \/-(a: A) => f(a)
+                case \/-(a) => f(a)
                 case -\/(e) => fa map { case -\/(_) => e.left }
             }
 
             override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map {
-                case \/-(a:A) => f(a).right
+                case \/-(a) => f(a).right
                 case -\/(e) => e.left
             }
         }
@@ -233,12 +233,12 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
             override def tailRecM[A, B](a: A)(f: A => StateResultT[Either[A, B]]): StateResultT[B] = ???
 
             override def flatMap[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap {
-                case Right(a: A) => f(a)
+                case Right(a) => f(a)
                 case Left(e) => fa map { case Left(_) => e.asLeft }
             }
 
             override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map {
-                case Right(a: A) => f(a).asRight
+                case Right(a) => f(a).asRight
                 case Left(e) => e.asLeft
             }
         }
