@@ -8,29 +8,47 @@ import scalaz.effect.IO
 import scalaz._
 import Scalaz._
 
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
+
 
 class Example_11_State extends FlatSpec{
     val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
     "A State for logging" should "" in {
+        implicit val ec =  scala.concurrent.ExecutionContext.global
+
         def logState[A](s:IO[Unit], a:A): State[List[IO[Unit]], A] = State[List[IO[Unit]], A]{ logs =>
             (logs :+ s, a)
         }
 
         type Valid[A] = Exception \/ A
+        type Report = List[IO[Unit]]
+        type StateResult[A] = State[Report, Valid[A]]
 
-        def i2f(i:Int): Valid[BigDecimal] = if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
-        def f2s(f: Valid[BigDecimal]): Valid[String] = f match {
-            case \/-(f1) => f1.toString.right
-            case -\/(e) => e.left
+        def i2f: Kleisli[Future, Int, StateResult[BigDecimal]] = Kleisli{ i =>
+            Future {
+                State( logs =>(
+                        logs :+ IO(logger.debug("i2f")),
+                        if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left)
+                )
+            }
         }
 
-        val comp: Int => State[List[IO[Unit]], Valid[String]] = i => for{
-            f <- logState(IO{ logger.info(s" => i2f($i)")}, i2f(i))
-            s <- logState(IO{ logger.info(s" => f2s($f)")}, f2s(f))
-        } yield s
+        def f2s(report:List[IO[Unit]]): Kleisli[Future, StateResult[BigDecimal], (Report, Valid[String])] = Kleisli { state =>
+            Future {
+                state(report :+ IO(logger.debug("f2s"))) match {
+                        case (logs, \/-(f)) => (logs, f.toString.right)
+                        case (logs, -\/(e)) => (logs, e.left)
+                    }
+            }
+        }
 
-        comp(2)(List.empty) match {
+        def comp(report:List[IO[Unit]]): Kleisli[Future, Int, (Report, Valid[String])] = i2f andThen f2s(report)
+
+        val report:List[IO[Unit]] = List.empty
+
+        Await.result(comp(report :+ IO{logger.debug("main")})(-2), Duration.Inf) match {
             case (logs, a) => {
                 logs.foreach(_.unsafePerformIO())
                 a match {
