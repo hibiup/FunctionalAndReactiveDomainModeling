@@ -128,14 +128,11 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         import scalaz._
         import Scalaz._
         import scalaz.effect.IO
-        import scala.concurrent.duration.Duration
-        import scala.concurrent.{Await, Future}
-
-        implicit val ec =  scala.concurrent.ExecutionContext.global
+        import scalaz.concurrent.Task
 
         type Valid[A] = Exception \/ A
         type Report = Vector[IO[Unit]]
-        type StateResultT[A] = StateT[Future, Report, Valid[A]]
+        type StateResultT[A] = StateT[Task, Report, Valid[A]]
 
         /**
           * 因为 StateResultT 是定制类型，需要自己实现一个 Bind(Monad) 来实现 flatMap(Bind) 和 map
@@ -154,9 +151,9 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         def i2f: Kleisli[StateResultT, Int, BigDecimal] = Kleisli[StateResultT, Int, BigDecimal] { i =>
             StateT { logs:Report =>
-                Future (
+                Task (
                     /** 问题：不知道什么原因会执行两遍 */
-                    logs :+ IO(logger.debug("i2f")),
+                    logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - i2f")),
                     if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
                 )
             }
@@ -164,8 +161,8 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { s =>
             StateT { logs =>
-                Future (
-                    logs :+ IO(logger.debug("f2s")),
+                Task (
+                    logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2s")),
                     s.toString.right
                 )
             }
@@ -173,26 +170,29 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         def comp: Kleisli[StateResultT, Int, String] = i2f andThen f2s
 
-        Await.result(comp(-2)(Vector.empty), Duration.Inf) match {
+        comp(2)(Vector.empty).flatMap { x => Task { x match {
             case (logs:Report, a) => {
                 logs.foreach(_.unsafePerformIO())
                 a match {
-                    case \/-(s) => println(s"Finally we get: ${s}")
-                    case -\/(e) => println(e.getMessage)
+                    case \/-(s) => println(s"[Thread-${Thread.currentThread.getId}] - Finally we get: ${s}")
+                    case -\/(e) => println(s"[Thread-${Thread.currentThread.getId}] - ${e.getMessage}")
                 }
             }
-        }
+        }}}.unsafePerformSync
     }
 
     /**
       * Writer 和 State 类似, 是一个为日志这类应用定制了的 State，它不需要传入参数(logs), 直接通过 tell 方法接受日志和要执行的
       * 目标函数
+      *
+      * http://eed3si9n.com/herding-cats/Writer.html
+      *
       * */
     "A Writer for logging" should "" in {
         import cats._
         import cats.data._
         import cats.implicits._
-        import scalaz.effect.IO
+        import cats.effect.IO
 
         /** 函数返回 Writer (和上例返回 State 类是) */
         def gcd(a: Int, b: Int): Writer[Vector[IO[Unit]], Int] = {
@@ -208,7 +208,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         // 不需传入 logs
         val (logs, result) = gcd(12, 16).run  // s:Writer
-        logs.foreach(l => l.unsafePerformIO())
+        logs.foreach(l => l.unsafeRunSync())
         println(s"Finally we get: ${result}")
     }
 
