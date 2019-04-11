@@ -59,7 +59,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         }
     }
 
-    "A StateT for logging" should "" in {
+    "A StateT for logging (Version: 1)" should "" in {
         implicit val ec =  scala.concurrent.ExecutionContext.global
 
         type Valid[A] = Exception \/ A
@@ -74,8 +74,8 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         def i2f: Kleisli[StateResultT, Int, Valid[BigDecimal]] = Kleisli{ i =>
             StateT { logs =>
                 Future (
-                        logs :+ IO(logger.debug("i2f")),
-                        if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
+                    logs :+ IO(logger.debug("i2f")),
+                    if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
                 )
             }
         }
@@ -100,6 +100,57 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         Await.result(comp(-2)(List.empty), Duration.Inf) match {
             case (logs, a) => {
+                logs.foreach(_.unsafePerformIO())
+                a match {
+                    case \/-(s) => println(s"Finally we get: ${s}")
+                    case -\/(e) => println(e.getMessage)
+                }
+            }
+        }
+    }
+
+    "A StateT for logging (Version: 2)" should "" in {
+        implicit val ec =  scala.concurrent.ExecutionContext.global
+
+        type Valid[A] = Exception \/ A
+        type Report = List[IO[Unit]]
+        type StateResultT[A] = StateT[Future, Report, Valid[A]]
+
+        implicit val StateResultBind: Bind[StateResultT] = new Bind[StateResultT] {
+            override def bind[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap {
+                case \/-(a: A) => f(a)
+                case -\/(e) => fa map { case -\/(_) => e.left }
+            }
+
+            override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map {
+                case \/-(a:A) => f(a).right
+                case -\/(e) => e.left
+            }
+        }
+
+        def i2f: Kleisli[StateResultT, Int, BigDecimal] = Kleisli[StateResultT, Int, BigDecimal] { i =>
+            StateT { logs:Report =>
+                Future (
+                    /** 问题：不知道什么原因会执行两遍 */
+                    logs :+ IO(logger.debug("i2f")),
+                    if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
+                )
+            }
+        }
+
+        def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { s =>
+            StateT { logs =>
+                Future (
+                    logs :+ IO(logger.debug("f2s")),
+                    s.toString.right
+                )
+            }
+        }
+
+        def comp: Kleisli[StateResultT, Int, String] = i2f andThen f2s
+
+        Await.result(comp(-2)(List.empty), Duration.Inf) match {
+            case (logs:Report, a) => {
                 logs.foreach(_.unsafePerformIO())
                 a match {
                     case \/-(s) => println(s"Finally we get: ${s}")
