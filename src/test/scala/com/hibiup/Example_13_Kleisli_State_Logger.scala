@@ -212,6 +212,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         println(s"Finally we get: ${result}")
     }
 
+
     "A WriterT for logging" should "" in {
         import cats._
         import cats.data._
@@ -252,17 +253,90 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
             }
         }
 
-        def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { s =>
+        def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { f =>
             WriterT {
                 Future ((
-                    Vector(IO(logger.debug("f2s"))), s.toString.asRight
+                        Vector(IO(logger.debug("f2s"))), f.toString.asRight
                 ))
             }
         }
 
         def comp: Kleisli[StateResultT, Int, String] = i2f andThen f2s
 
-        Await.result(comp(-2)run, Duration.Inf) match {
+        Await.result(comp(-2).run, Duration.Inf) match {
+            case (logs:Report, a) => {
+                logs.foreach(_.unsafeRunSync())
+                a match {
+                    case Right(s) => println(s"Finally we get: $s")
+                    case Left(e) => println(e.getMessage)
+                }
+            }
+        }
+    }
+
+
+    "EitherT and WriterT works together for 'for-comprehension' " should "" in {
+        import cats._
+        import cats.data._
+        import cats.implicits._
+        import cats.effect.IO
+        import scala.concurrent.duration.Duration
+        import scala.concurrent.{Await, Future}
+
+        implicit val ec =  scala.concurrent.ExecutionContext.global
+
+        type Report = Vector[IO[Unit]]
+        /**
+          *  定义一个 type lambda 来结合 EitherT 和 WriterT:
+          *
+          *    type ValidT[A] = EitherT[({type λ[α] = WriterT[Future, Report,α]})#λ, Throwable, A]
+          *
+          *  或写成两行：
+          * */
+        type λ[α] = WriterT[Future, Report,α]       // 定义 type lambda
+        type ValidT[A] = EitherT[λ, Throwable, A]   // 应用　type lambda
+
+        def i2fW(i:Int): ValidT[BigDecimal] = {
+            if (i >= 0) {
+                EitherT {
+                    WriterT {
+                        Future { (
+                                Vector(IO(logger.debug("i2f"))),
+                                BigDecimal(i).asRight      // 告知顶层的 EitherT 将这个值转载如 right
+                        ) }
+                    }
+                }
+            }
+            else {
+                EitherT {
+                    WriterT {
+                        Future { (
+                                Vector(IO(logger.debug("i2f"))),
+                                new RuntimeException("Input is smaller then 0").asLeft
+                        ) }
+                    }
+                }
+            }
+        }
+
+        def f2sW(f:BigDecimal): ValidT[String] = {
+            EitherT {
+                WriterT {
+                    Future { (
+                            Vector(IO(logger.debug("f2s"))),
+                            f.toString.asRight
+                    ) }
+                }
+            }
+        }
+
+        /** for-comprehension ************************************/
+        def compFor(i:Int) = for {
+            f <- i2fW(i)
+            s <- f2sW(f)
+        } yield s
+
+        Await.result(compFor(-2).value.run, Duration.Inf) match {
             case (logs:Report, a) => {
                 logs.foreach(_.unsafeRunSync())
                 a match {

@@ -19,6 +19,7 @@ lazy val ShapelessGuide = (project in file(".")).
                 "org.scalaz" %% "scalaz-core" % scalazVersion,
                 "org.scalaz" %% "scalaz-concurrent" % scalazVersion,
                 "org.typelevel" %% "cats-core" % catsVersion,
+                "org.typelevel" %% "cats-free" % catsVersion,
                 "org.typelevel" %% "cats-effect" % catsEffectVersion,
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
