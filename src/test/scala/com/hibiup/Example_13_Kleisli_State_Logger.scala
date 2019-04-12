@@ -287,13 +287,19 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         type Report = Vector[IO[Unit]]
         /**
-          *  定义一个 type lambda 来结合 EitherT 和 WriterT:
+          * 当 EitherT 和 WriterT 结合在一起的时候，一个恰当的定义貌似：
+          *
+          *     EitherT[WriterT[Future, Report, _], Throwable, A]
+          *
+          * 但是这个类型存在一个问题：Transformer 的第一个参数是一个容器，它的值是后两个参数定义的，并且不需要显示表达，
+          * 但是因为 WriterT 接受三个参数，所以我们不得不明确告诉便一起请使用第三个参数作为预留位置。为此需要定义一个 type lambda 来明确指定位置:
           *
           *    type ValidT[A] = EitherT[({type λ[α] = WriterT[Future, Report,α]})#λ, Throwable, A]
           *
-          *  或写成两行：
+          * 这个表达式：定义一个 λ[α] 类型，它的参数用 α 表示，它的值等于：WriterT[Future, Report, α]。也就是说，我们名确定义了
+          * WriterT 的第三个参数等于 λ 的参数，这样我们就得到了一个只接受一个参数的新的类型： λ。 更易读的形式可以写成两行：
           * */
-        type λ[α] = WriterT[Future, Report,α]       // 定义 type lambda
+        type λ[α] = WriterT[Future, Report, α]       // 定义 type lambda
         type ValidT[A] = EitherT[λ, Throwable, A]   // 应用　type lambda
 
         def i2fW(i:Int): ValidT[BigDecimal] = {
