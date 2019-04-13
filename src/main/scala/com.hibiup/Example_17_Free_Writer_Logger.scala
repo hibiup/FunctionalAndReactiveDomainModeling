@@ -21,6 +21,7 @@ package Example_17_Free_Kleisli_State_Logger {
             trait Result[+A]
             case class I2F(i:Int) extends Result[BigDecimal]
             case class F2S(f:BigDecimal) extends Result[String]
+            case class F2B(f:BigDecimal) extends Result[String]
 
             /** 2) */
             type ResultF[A] = Free[Result, A]
@@ -37,11 +38,12 @@ package Example_17_Free_Kleisli_State_Logger {
             /** 3) */
             def i2f(i:Int):ResultF[BigDecimal] = Free.liftF[Result, BigDecimal](I2F(i))
             def f2s(f:BigDecimal):ResultF[String] = Free.liftF[Result, String](F2S(f))
+            def f2b(f:BigDecimal):ResultF[String] = Free.liftF[Result, String](F2B(f))
 
             /** Free 组合 */
             def i2s(i:Int):ResultF[String] = for {
                 f <- i2f(i)
-                s <- f2s(f)
+                s <- if (f>1) f2s(f) else f2b(f)   // 在 for-comprehension 里实现逻辑分支.
             } yield s
         }
 
@@ -73,6 +75,7 @@ package Example_17_Free_Kleisli_State_Logger {
                 override def apply[A](fa: Result[A]): ResultT[A] = fa match {
                     case I2F(i) => i2f(i).asInstanceOf[ResultT[A]]
                     case F2S(f) => f2s(f).asInstanceOf[ResultT[A]]
+                    case F2B(f) => f2b(f).asInstanceOf[ResultT[A]]
                 }
             }
 
@@ -81,8 +84,8 @@ package Example_17_Free_Kleisli_State_Logger {
                     EitherT {
                         WriterT {
                             Future { (
-                                    Vector(IO(logger.debug("i2f"))),
-                                    BigDecimal(i).asRight      // 告知顶层的 EitherT 将这个值转载如 right
+                                Vector(IO(logger.debug("i2f"))),
+                                BigDecimal(i).asRight      // 告知顶层的 EitherT 将这个值转载如 right
                             ) }
                         }
                     }
@@ -91,8 +94,8 @@ package Example_17_Free_Kleisli_State_Logger {
                     EitherT {
                         WriterT {
                             Future { (
-                                    Vector(IO(logger.debug("i2f"))),
-                                    new RuntimeException("Input is smaller then 0").asLeft
+                                Vector(IO(logger.debug("i2f"))),
+                                new RuntimeException("Input is smaller then 0").asLeft
                             ) }
                         }
                     }
@@ -103,8 +106,19 @@ package Example_17_Free_Kleisli_State_Logger {
                 EitherT {
                     WriterT {
                         Future { (
-                                Vector(IO(logger.debug("f2s"))),
-                                f.toString.asRight
+                            Vector(IO(logger.debug("f2s"))),
+                            f.toString.asRight
+                        ) }
+                    }
+                }
+            }
+
+            def f2b(f:BigDecimal): ResultT[String] = {
+                EitherT {
+                    WriterT {
+                        Future { (
+                                Vector(IO(logger.debug("f2b"))),
+                                (if (f<1) false else true).toString.asRight
                         ) }
                     }
                 }
@@ -114,11 +128,16 @@ package Example_17_Free_Kleisli_State_Logger {
         object ExpressionAlgs extends ExpressionAlgs
         import ExpressionAlgs._
 
-        val _i2s: ResultT[_] = MyExpressionInterpreter(i2s(2))
-        Await.result(_i2s.value.run, Duration.Inf) match {
-            case (logs, a) => {
-                logs.foreach(_.unsafeRunSync())
-                a.foreach(println)
+        List(-1,0,1,2).foreach { i =>
+            val _i2s: ResultT[_] = MyExpressionInterpreter(i2s(i))
+            Await.result(_i2s.value.run, Duration.Inf) match {
+                case (logs, res) => {
+                    logs.foreach(_.unsafeRunSync())
+                    res match {
+                        case Left(e:Throwable) => println(e.getMessage)
+                        case Right(a) => println(a)
+                    }
+                }
             }
         }
     }
