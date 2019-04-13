@@ -76,15 +76,15 @@ package Example_17_Free_Kleisli_State_Logger {
           * 业务实现
           * */
         object Implement {
+            val logger = Logger(LoggerFactory.getLogger(this.getClass))
+            implicit val ec =  scala.concurrent.ExecutionContext.global
+
             /**
              * 到实现的时候才定义返回值的容器类型
              */
             type Report = Vector[IO[Unit]]
             type λ[α] = WriterT[Future, Report, α]
             type ResultT[A] = EitherT[λ, Throwable, A]
-
-            val logger = Logger(LoggerFactory.getLogger(this.getClass))
-            implicit val ec =  scala.concurrent.ExecutionContext.global
 
             /*
              * 辅助 ResultT 运算的 Monad. Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
@@ -118,9 +118,10 @@ package Example_17_Free_Kleisli_State_Logger {
                         EitherT {
                             WriterT {
                                 Future {
+                                    // 返回值（可以拆分出纯业务函数去实现）
                                     (
-                                            Vector(IO(logger.debug("i2f"))),
-                                            BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
+                                        Vector(IO(logger.debug("i2f"))),
+                                        BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
                                     )
                                 }
                             }
@@ -131,8 +132,8 @@ package Example_17_Free_Kleisli_State_Logger {
                             WriterT {
                                 Future {
                                     (
-                                            Vector(IO(logger.debug("i2f"))),
-                                            new RuntimeException("Input is smaller then 0").asLeft
+                                        Vector(IO(logger.debug("i2f"))),
+                                        new RuntimeException("Input is smaller then 0").asLeft
                                     )
                                 }
                             }
@@ -145,8 +146,8 @@ package Example_17_Free_Kleisli_State_Logger {
                         WriterT {
                             Future {
                                 (
-                                        Vector(IO(logger.debug("f2s"))),
-                                        f.toString.asRight
+                                    Vector(IO(logger.debug("f2s"))),
+                                    f.toString.asRight
                                 )
                             }
                         }
@@ -158,8 +159,8 @@ package Example_17_Free_Kleisli_State_Logger {
                         WriterT {
                             Future {
                                 (
-                                        Vector(IO(logger.debug("f2b"))),
-                                        (if (f < 1) false else true).toString.asRight
+                                    Vector(IO(logger.debug("f2b"))),
+                                    (if (f < 1) false else true).toString.asRight
                                 )
                             }
                         }
