@@ -61,7 +61,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         }
     }
 
-    "A StateT for logging (Version: 1)" should "" in {
+    "A StateT for logging" should "" in {
         /**
           * 上例中如果存在多重分装，例如 Future[State[...]]，那么就需要 StateT 将返回值提取出来
           * */
@@ -121,7 +121,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         }
     }
 
-    "A StateT for logging (Version: 2)" should "" in {
+    "A StateT and EitherT for logging" should "" in {
         /**
           * 修复上例中 StateResultT[A] 不能返回最终值得问题。
           * */
@@ -129,48 +129,47 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
         import Scalaz._
         import scalaz.effect.IO
         import scalaz.concurrent.Task
+        implicit val ec =  scala.concurrent.ExecutionContext.global
 
-        type Valid[A] = Exception \/ A
         type Report = Vector[IO[Unit]]
-        type StateResultT[A] = StateT[Task, Report, Valid[A]]
+        /** EitherT[StateT[Task, Report, _], Throwable, A] */
+        type λ[α] = StateT[Task, Report, α]
+        type ResultT[A] = EitherT[λ, Throwable, A]
 
         /**
           * 因为 StateResultT 是定制类型，需要自己实现一个 Bind(Monad) 来实现 flatMap(Bind) 和 map
           * */
-        implicit val StateResultBind: Bind[StateResultT] = new Bind[StateResultT] {
-            override def bind[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap {
-                case \/-(a) => f(a)
-                case -\/(e) => fa map { case -\/(_) => e.left }
-            }
+        implicit val StateResultBind: Bind[ResultT] = new Bind[ResultT] {
+            override def bind[A, B](fa: ResultT[A])(f: A => ResultT[B]): ResultT[B] = fa.flatMap(a => f(a))
+            override def map[A, B](fa: ResultT[A])(f: A => B): ResultT[B] = fa.map(a => f(a) )
+        }
 
-            override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map {
-                case \/-(a) => f(a).right
-                case -\/(e) => e.left
+        def i2f: Kleisli[ResultT, Int, BigDecimal] = Kleisli[ResultT, Int, BigDecimal] { i =>
+            EitherT {
+                StateT { logs:Report =>
+                    Task {
+                        (logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - i2f")),
+                        if (i >= 0) BigDecimal(i).right
+                        else (new RuntimeException("Input is smaller then 0")).left)
+                    }
+                }
             }
         }
 
-        def i2f: Kleisli[StateResultT, Int, BigDecimal] = Kleisli[StateResultT, Int, BigDecimal] { i =>
-            StateT { logs:Report =>
-                Task (
-                    /** 问题：不知道什么原因会执行两遍 */
-                    logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - i2f")),
-                    if (i >= 0) BigDecimal(i).right else (new RuntimeException("Input is smaller then 0")).left
-                )
+        def f2s: Kleisli[ResultT, BigDecimal, String] = Kleisli[ResultT, BigDecimal, String] { s =>
+            EitherT {
+                StateT { logs =>
+                    Task(
+                        logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2s")),
+                        s.toString.right
+                    )
+                }
             }
         }
 
-        def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { s =>
-            StateT { logs =>
-                Task (
-                    logs :+ IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2s")),
-                    s.toString.right
-                )
-            }
-        }
+        def comp: Kleisli[ResultT, Int, String] = i2f andThen f2s
 
-        def comp: Kleisli[StateResultT, Int, String] = i2f andThen f2s
-
-        comp(2)(Vector.empty).flatMap { x => Task { x match {
+        comp(-2).run(Vector.empty).flatMap { x => Task { x match {
             case (logs:Report, a) => {
                 logs.foreach(_.unsafePerformIO())
                 a match {
@@ -213,69 +212,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
     }
 
 
-    "A WriterT for logging" should "" in {
-        import cats._
-        import cats.data._
-        import cats.implicits._
-        import cats.effect.IO
-        import scala.concurrent.duration.Duration
-        import scala.concurrent.{Await, Future}
-
-        implicit val ec =  scala.concurrent.ExecutionContext.global
-
-        type Valid[A] = Either[Throwable, A]
-        type Report = Vector[IO[Unit]]
-        type StateResultT[A] = WriterT[Future, Report, Valid[A]]
-
-        /**
-          * 因为 StateResultT 是定制类型，需要自己实现一个 Bind(Monad) 来实现 flatMap(Bind) 和 map
-          * */
-        implicit val StateResultBind: FlatMap[StateResultT] = new FlatMap[StateResultT] {
-            override def tailRecM[A, B](a: A)(f: A => StateResultT[Either[A, B]]): StateResultT[B] = ???
-
-            override def flatMap[A, B](fa: StateResultT[A])(f: A => StateResultT[B]): StateResultT[B] = fa flatMap {
-                case Right(a) => f(a)
-                case Left(e) => fa map { case Left(_) => e.asLeft }
-            }
-
-            override def map[A, B](fa: StateResultT[A])(f: A => B): StateResultT[B] = fa map {
-                case Right(a) => f(a).asRight
-                case Left(e) => e.asLeft
-            }
-        }
-
-        def i2f: Kleisli[StateResultT, Int, BigDecimal] = Kleisli[StateResultT, Int, BigDecimal] { i =>
-            WriterT {
-                Future (
-                    (Vector(IO(logger.debug("i2f"))),
-                    if (i >= 0) BigDecimal(i).asRight  else new RuntimeException("Input is smaller then 0").asLeft)
-                )
-            }
-        }
-
-        def f2s: Kleisli[StateResultT, BigDecimal, String] = Kleisli[StateResultT, BigDecimal, String] { f =>
-            WriterT {
-                Future ((
-                        Vector(IO(logger.debug("f2s"))), f.toString.asRight
-                ))
-            }
-        }
-
-        def comp: Kleisli[StateResultT, Int, String] = i2f andThen f2s
-
-        Await.result(comp(-2).run, Duration.Inf) match {
-            case (logs:Report, a) => {
-                logs.foreach(_.unsafeRunSync())
-                a match {
-                    case Right(s) => println(s"Finally we get: $s")
-                    case Left(e) => println(e.getMessage)
-                }
-            }
-        }
-    }
-
-
-    "EitherT and WriterT works together for 'for-comprehension' " should "" in {
+    "A WriterT and EitherT works together for Kleisli logging" should "" in {
         import cats._
         import cats.data._
         import cats.implicits._
@@ -291,8 +228,88 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
           *
           *     EitherT[WriterT[Future, Report, _], Throwable, A]
           *
-          * 但是这个类型存在一个问题：Transformer 的第一个参数是一个容器，它的值是后两个参数定义的，并且不需要显示表达，
-          * 但是因为 WriterT 接受三个参数，所以我们不得不明确告诉便一起请使用第三个参数作为预留位置。为此需要定义一个 type lambda 来明确指定位置:
+          * 但是 EitherT 存在一个问题：通常 Transformer 的第一个参数是一个单参数容器，它的值是后两个参数定义的，并且不需要显示表达，
+          * 但是因为 WriterT 接受三个参数，所以我们不得不明确告诉编译器请使用第三个参数作为预留位置。为此需要定义一个 type lambda 来明确指定位置:
+          *
+          *    type ValidT[A] = EitherT[({type λ[α] = WriterT[Future, Report,α]})#λ, Throwable, A]
+          *
+          * 这个表达式：定义一个 λ[α] 类型，它的参数用 α 表示，它的值等于：WriterT[Future, Report, α]。也就是说，我们名确定义了
+          * WriterT 的第三个参数等于 λ 的参数，这样我们就得到了一个只接受一个参数的新的类型： λ。 更易读的形式可以写成两行：
+          * */
+        type λ[α] = WriterT[Future, Report, α]
+        type ResultT[A] = EitherT[λ, Throwable, A]
+
+        /**
+          * 因为 StateResultT 是定制类型，需要自己实现一个 Bind(Monad) 来实现 flatMap(Bind) 和 map
+          * */
+        implicit val StateResultBind: FlatMap[ResultT] = new FlatMap[ResultT] {
+            override def tailRecM[A, B](a: A)(f: A => ResultT[Either[A, B]]): ResultT[B] = ???
+
+            override def flatMap[A, B](fa: ResultT[A])(f: A => ResultT[B]): ResultT[B] = {
+                fa.flatMap{ a:A => f(a) }
+            }
+
+            override def map[A, B](fa: ResultT[A])(f: A => B): ResultT[B] = {
+                fa map (a => f(a)/*.asInstanceOf[B]*/)
+            }
+        }
+
+        def i2f: Kleisli[ResultT, Int, BigDecimal] = Kleisli[ResultT, Int, BigDecimal] { i =>
+            EitherT(
+                WriterT {
+                    Future (
+                        (Vector(IO(logger.debug("i2f"))),
+                        if (i >= 0) BigDecimal(i).asRight  else new RuntimeException("Input is smaller then 0").asLeft)
+                    )
+                }
+            )
+        }
+
+        def f2s: Kleisli[ResultT, BigDecimal, String] = Kleisli[ResultT, BigDecimal, String] { f =>
+            EitherT(
+                WriterT {
+                    Future ((
+                            Vector(IO(logger.debug("f2s"))), f.toString.asRight
+                    ))
+                }
+            )
+        }
+
+        def comp: Kleisli[ResultT, Int, String] = i2f andThen f2s
+
+        Await.result(comp(-2).value.run, Duration.Inf) match {
+            case (logs:Report, a) => {
+                logs.foreach(_.unsafeRunSync())
+                a match {
+                    case Right(s) => println(s"Finally we get: $s")
+                    case Left(e) => println(e.getMessage)
+                }
+            }
+        }
+    }
+
+
+    "EitherT and WriterT works together for 'for-comprehension' " should "" in {
+        /**
+          * 上例中由于使用 Kleisli, 所以需要定制的 Monad 来实现对结果的映射,
+          * 如果使用 for-comprehension 则 for 显示执行了映射,因此就不需要 Monad 了.
+          * */
+        import cats.data._
+        import cats.implicits._
+        import cats.effect.IO
+        import scala.concurrent.duration.Duration
+        import scala.concurrent.{Await, Future}
+
+        implicit val ec =  scala.concurrent.ExecutionContext.global
+
+        type Report = Vector[IO[Unit]]
+        /**
+          * 当 EitherT 和 WriterT 结合在一起的时候，一个恰当的定义貌似：
+          *
+          *     EitherT[WriterT[Future, Report, _], Throwable, A]
+          *
+          * 但是 EitherT 存在一个问题：通常 Transformer 的第一个参数是一个单参数容器，它的值是后两个参数定义的，并且不需要显示表达，
+          * 但是因为 WriterT 接受三个参数，所以我们不得不明确告诉编译器请使用第三个参数作为预留位置。为此需要定义一个 type lambda 来明确指定位置:
           *
           *    type ValidT[A] = EitherT[({type λ[α] = WriterT[Future, Report,α]})#λ, Throwable, A]
           *
@@ -300,9 +317,9 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
           * WriterT 的第三个参数等于 λ 的参数，这样我们就得到了一个只接受一个参数的新的类型： λ。 更易读的形式可以写成两行：
           * */
         type λ[α] = WriterT[Future, Report, α]       // 定义 type lambda
-        type ValidT[A] = EitherT[λ, Throwable, A]   // 应用　type lambda
+        type ResultT[A] = EitherT[λ, Throwable, A]   // 应用　type lambda
 
-        def i2fW(i:Int): ValidT[BigDecimal] = {
+        def i2f(i:Int): ResultT[BigDecimal] = {
             if (i >= 0) {
                 EitherT {
                     WriterT {
@@ -325,7 +342,7 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
             }
         }
 
-        def f2sW(f:BigDecimal): ValidT[String] = {
+        def f2s(f:BigDecimal): ResultT[String] = {
             EitherT {
                 WriterT {
                     Future { (
@@ -338,8 +355,8 @@ class Example_13_Kleisli_State_Logger extends FlatSpec{
 
         /** for-comprehension ************************************/
         def compFor(i:Int) = for {
-            f <- i2fW(i)
-            s <- f2sW(f)
+            f <- i2f(i)
+            s <- f2s(f)
         } yield s
 
         Await.result(compFor(-2).value.run, Duration.Inf) match {
