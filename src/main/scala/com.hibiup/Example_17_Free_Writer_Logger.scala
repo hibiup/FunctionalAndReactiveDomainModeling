@@ -111,36 +111,23 @@ package Example_17_Free_Kleisli_State_Logger {
               * */
             implicit object BusinessInterpreter extends Compiler[ResultM] {
                 override protected def i2f(i: Int): ResultM[BigDecimal] = {
-                    if (i >= 0) {
-                        /**
-                         * 根据实现时的需要，实现返回值的装箱.
-                         * */
-                        EitherT {
-                            WriterT {
-                                Future {
-                                    // 返回值（可以拆分出纯业务函数去实现）
-                                    (
-                                        Vector(IO(logger.debug("i2f"))),
-                                        BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        EitherT {
-                            WriterT {
-                                Future {
-                                    (
-                                        Vector(IO(logger.debug("i2f"))),
-                                        new RuntimeException("Input is smaller then 0").asLeft
-                                    )
-                                }
+                    /**
+                      * 根据实现时的需要，实现返回值的装箱.
+                      * */
+                    EitherT {
+                        WriterT {
+                            Future {
+                                // 返回值（可以拆分出纯业务函数去实现）
+                                (
+                                    Vector(IO(logger.debug("i2f"))),
+                                    if (i >= 0) BigDecimal(i).asRight   // 告知顶层的 EitherT 将这个值转载如 right
+                                    else new RuntimeException("Input is smaller then 0").asLeft
+                                )
                             }
                         }
                     }
                 }
-
+                
                 override protected def f2s(f: BigDecimal): ResultM[String] = {
                     EitherT {
                         WriterT {
