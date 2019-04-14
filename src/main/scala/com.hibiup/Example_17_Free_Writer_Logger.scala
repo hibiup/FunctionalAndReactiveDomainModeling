@@ -4,13 +4,13 @@ package Example_17_Free_Kleisli_State_Logger {
     import cats.data._
     import cats.effect.IO
     import cats.free.Free
-    import cats.{Id, Monad, ~>}
+    import cats.{Monad, ~>}
     import cats.implicits._
     import com.typesafe.scalalogging.Logger
     import org.slf4j.LoggerFactory
 
     import scala.concurrent.duration.Duration
-    import scala.concurrent.{Await, Future}
+    import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 
     object FreeWriterLogger extends App{
         object ADTs {
@@ -18,31 +18,31 @@ package Example_17_Free_Kleisli_State_Logger {
               * 1) ADT
               * */
             trait Result[+A]
-            case class I2F(i:Int) extends Result[BigDecimal]
-            case class F2S(f:BigDecimal) extends Result[String]
-            case class F2B(f:BigDecimal) extends Result[String]
+            final case class I2F(i:Int) extends Result[BigDecimal]
+            final case class F2S(f:BigDecimal) extends Result[String]
+            final case class F2B(f:BigDecimal) extends Result[String]
 
             /****************************************
               * 2) Lift
               * */
-            type ResultF[A] = Free[Result, A]
+            type ResultA[A] = Free[Result, A]
         }
 
 
         /**************************************
           * 3) 定义 DSL (代数)
           * */
-        object Alg {
+        object DSLs {
             import ADTs._
 
-            def i2f(i:Int):ResultF[BigDecimal] = Free.liftF[Result, BigDecimal](I2F(i))
-            def f2s(f:BigDecimal):ResultF[String] = Free.liftF[Result, String](F2S(f))
-            def f2b(f:BigDecimal):ResultF[String] = Free.liftF[Result, String](F2B(f))
+            final private def i2f(i:Int):ResultA[BigDecimal] = Free.liftF[Result, BigDecimal](I2F(i))
+            final private def f2s(f:BigDecimal):ResultA[String] = Free.liftF[Result, String](F2S(f))
+            final private def f2b(f:BigDecimal):ResultA[String] = Free.liftF[Result, String](F2B(f))
 
             /* Free 组合 */
-            def comp(i:Int):ResultF[String] = for {
+            final def comp(i:Int):ResultA[String] = for {
                 f <- i2f(i)
-                s <- if (f>1) f2s(f) else f2b(f)   /** 在 for-comprehension 里实现逻辑分支. */
+                s <- if (f<=1) f2b(f) else f2s(f)   /** 在 for-comprehension 里实现逻辑分支. */
             } yield s
         }
 
@@ -56,7 +56,7 @@ package Example_17_Free_Kleisli_State_Logger {
             import ADTs._
             // 将一个 Free Monad 映射到一个带有业务运算的函数
             // 需要一个 Monad 实现 ResultT 数据类型的转换
-            def apply[A](action: ResultF[A])(implicit monad:Monad[M]): M[A] = action.foldMap(route)
+            def apply[A](action: ResultA[A])(implicit monad:Monad[M]): M[A] = action.foldMap(route)
 
             private val route: Result ~> M = new (Result ~> M) {
                 override def apply[A](fa: Result[A]): M[A] = fa match {
@@ -66,9 +66,9 @@ package Example_17_Free_Kleisli_State_Logger {
                 }
             }
 
-            def i2f(i:Int): M[BigDecimal]
-            def f2s(f:BigDecimal): M[String]
-            def f2b(f:BigDecimal): M[String]
+            protected def i2f(i:Int): M[BigDecimal]
+            protected def f2s(f:BigDecimal): M[String]
+            protected def f2b(f:BigDecimal): M[String]
         }
 
 
@@ -77,27 +77,27 @@ package Example_17_Free_Kleisli_State_Logger {
           * */
         object Implement {
             val logger = Logger(LoggerFactory.getLogger(this.getClass))
-            implicit val ec =  scala.concurrent.ExecutionContext.global
+            implicit val ec: ExecutionContextExecutor =  scala.concurrent.ExecutionContext.global
 
             /**
              * 到实现的时候才定义返回值的容器类型
              */
             type Report = Vector[IO[Unit]]
             type λ[α] = WriterT[Future, Report, α]
-            type ResultT[A] = EitherT[λ, Throwable, A]
+            type ResultM[A] = EitherT[λ, Throwable, A]
 
             /*
              * 辅助 ResultT 运算的 Monad. Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
              * */
-            implicit val ResultMonad = new Monad[ResultT] {
-                override def flatMap[A, B](fa: ResultT[A])(f: A => ResultT[B]): ResultT[B] = fa flatMap { a => f(a) }
+            implicit val ResultMonad:Monad[ResultM] = new Monad[ResultM] {
+                override def flatMap[A, B](fa: ResultM[A])(f: A => ResultM[B]): ResultM[B] = fa flatMap { a => f(a) }
 
-                override def tailRecM[A, B](a: A)(f: A => ResultT[Either[A, B]]): ResultT[B] = flatMap(f(a)) {
+                override def tailRecM[A, B](a: A)(f: A => ResultM[Either[A, B]]): ResultM[B] = flatMap(f(a)) {
                     case Left(e) => tailRecM(e)(f)
                     case Right(b) => pure(b)
                 }
 
-                override def pure[A](x: A): ResultT[A] = EitherT {
+                override def pure[A](x: A): ResultM[A] = EitherT {
                     WriterT {
                         Future {
                             (Vector.empty, x.asRight)
@@ -109,8 +109,8 @@ package Example_17_Free_Kleisli_State_Logger {
             /**
               * 实现业务运算
               * */
-            implicit object BusinessInterpreter extends Compiler[ResultT] {
-                override def i2f(i: Int): ResultT[BigDecimal] = {
+            implicit object BusinessInterpreter extends Compiler[ResultM] {
+                override protected def i2f(i: Int): ResultM[BigDecimal] = {
                     if (i >= 0) {
                         /**
                          * 根据实现时的需要，实现返回值的装箱.
@@ -141,7 +141,7 @@ package Example_17_Free_Kleisli_State_Logger {
                     }
                 }
 
-                override def f2s(f: BigDecimal): ResultT[String] = {
+                override protected def f2s(f: BigDecimal): ResultM[String] = {
                     EitherT {
                         WriterT {
                             Future {
@@ -154,7 +154,7 @@ package Example_17_Free_Kleisli_State_Logger {
                     }
                 }
 
-                override def f2b(f: BigDecimal): ResultT[String] = {
+                override protected def f2b(f: BigDecimal): ResultM[String] = {
                     EitherT {
                         WriterT {
                             Future {
@@ -176,19 +176,18 @@ package Example_17_Free_Kleisli_State_Logger {
         object Client {
             import Implement._          // import 某个实现(隐式)
 
-            def apply() = {
-                val interpreter: Compiler[ResultT] = implicitly[Compiler[ResultT]]
+            def apply():Unit = {
+                val interpreter: Compiler[ResultM] = implicitly[Compiler[ResultM]]
 
                 List(-1,0,1,2).foreach { i =>
-                    val computation: ResultT[_] = interpreter(Alg.comp(i))   // Call DSL
+                    val computation: ResultM[_] = interpreter(DSLs.comp(i))   // Call DSL
                     Await.result(computation.value.run, Duration.Inf) match {
-                        case (logs, res) => {
+                        case (logs, res) =>
                             logs.foreach(_.unsafeRunSync())
                             res match {
                                 case Left(e:Throwable) => println(e.getMessage)
                                 case Right(a) => println(a)
                             }
-                        }
                     }
                 }
             }
